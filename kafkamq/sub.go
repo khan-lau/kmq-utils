@@ -1,0 +1,323 @@
+package kafkamq
+
+import (
+	"slices"
+	"sync"
+
+	"github.com/IBM/sarama"
+	"github.com/khan-lau/kutils/container/kcontext"
+	"github.com/khan-lau/kutils/container/klists"
+	klog "github.com/khan-lau/kutils/klogger"
+	"github.com/khan-lau/kutils/ksync"
+)
+
+/////////////////////////////////////////////////////////////
+
+type ConsumerGroup struct {
+	ctx        *kcontext.ContextNode
+	conf       *Config
+	group      sarama.ConsumerGroup
+	brokerList []string
+	topics     []*Topic                               // 每个 topic 及其偏移量
+	queue      *ksync.LockedRingBuffer[*KafkaMessage] // 消息队列
+	bufferSize uint                                   // 缓冲区大小
+	logf       klog.AppLogFuncWithTag
+
+	wg sync.WaitGroup // 用于同步 Close
+}
+
+func NewConsumerGroup(ctx *kcontext.ContextNode, bufferSize uint, conf *Config, logf klog.AppLogFuncWithTag) (*ConsumerGroup, error) {
+	config := sarama.NewConfig()
+	// 设置config
+	config.Version = conf.Version                     // 设置协议版本
+	config.ClientID = conf.ClientId                   // 设置客户端 ID
+	config.ChannelBufferSize = conf.ChannelBufferSize // 设置通道缓冲区大小
+
+	config.Consumer.MaxProcessingTime = conf.Consumer.MaxProcessingTime // 消费者处理消息的最大时间, 超过后会触发再均衡
+	config.Consumer.Fetch.Min = int32(conf.Consumer.Min)                // 每次从broker拉取的最小消息字节数
+	config.Consumer.Fetch.Max = int32(conf.Consumer.Max)                // 每次从broker拉取的最大消息字节数
+	config.Consumer.Fetch.Default = int32(conf.Consumer.Fetch)          // 默认每次从broker拉取的字节数
+	config.Consumer.MaxWaitTime = conf.Consumer.MaxWaitTime             // 拉取消息时最大等待时间, 单位ms, 默认250ms
+	config.Consumer.Offsets.Initial = conf.Consumer.InitialOffset       // 设置消费者偏移量, -1: 从最新的消息开始消费, -2: 重新开始消费
+	if conf.Consumer.AutoCommit == AUTO_COMMIT_NATIVE {
+		config.Consumer.Offsets.AutoCommit.Enable = true                               // 是否自动提交偏移量
+		config.Consumer.Offsets.AutoCommit.Interval = conf.Consumer.AutoCommitInterval // 自动提交偏移量的间隔时间
+	} else {
+		config.Consumer.Offsets.AutoCommit.Enable = false // 禁用自动提交偏移量
+	}
+
+	config.Consumer.Return.Errors = conf.Consumer.ReturnError // 是否返回消费过程中遇到的错误, 默认为false
+
+	// 分区分配策略
+	assignor := conf.Consumer.GetAssignor()
+	if assignor == nil {
+		assignor = sarama.NewBalanceStrategyRange() // 默认采用 range 分配策略
+	}
+	config.Consumer.Group.Rebalance.Strategy = assignor
+
+	config.Consumer.Group.Rebalance.Timeout = conf.Consumer.RebalanceTimeout   // 重分配超时时间
+	config.Consumer.Group.Heartbeat.Interval = conf.Consumer.HeartbeatInterval // 心跳间隔时间
+	config.Consumer.Group.Session.Timeout = conf.Consumer.SessionTimeout       // 会话过期时间
+
+	// 网络配置
+	config.Net.MaxOpenRequests = conf.Net.MaxOpenRequests // 最大请求数, 默认为5，这里设置为1，避免并发请求过多导致Kafka端出现问题
+	config.Net.DialTimeout = conf.Net.DialTimeout         // 连接超时时间，默认为30秒
+	config.Net.ReadTimeout = conf.Net.ReadTimeout         // 从连接读取消息的超时时间，默认为120秒
+	config.Net.WriteTimeout = conf.Net.WriteTimeout       // 向连接写入消息的超时时间，默认为10秒
+
+	// 这一行的作用是: 设置客户端是否在连接 Kafka 时尝试解析 Kafka 集群的主机名称, 默认为 true。
+	// 如果设置为 true, 当 Kafka 集群的主机名称为 IP 地址时, 可能会导致连接失败, 因此这里设置为 false。
+	config.Net.ResolveCanonicalBootstrapServers = conf.Net.ResolveHost
+
+	// 若通过环境变量提供了 Kerberos 配置，则启用 Kerberos 认证
+	if err := applyConsumerKerberosEnv(config); err != nil {
+		if logf != nil {
+			logf(klog.ErrorLevel, kafka_tag, "enable Kerberos failed: %s", err.Error())
+		}
+		return nil, err
+	}
+
+	brokerList := klists.ToKSlice(conf.Brokers)
+	client, err := sarama.NewClient(brokerList, config)
+	if err != nil {
+		if logf != nil {
+			logf(klog.ErrorLevel, kafka_tag, "kafka.NewClient error: %s", err.Error())
+		}
+		return nil, err
+	}
+
+	group, err := sarama.NewConsumerGroupFromClient(conf.GroupID, client)
+	if err != nil {
+		if logf != nil {
+			logf(klog.ErrorLevel, kafka_tag, "kafka.NewConsumerGroup error: %s", err.Error())
+		}
+		return nil, err
+	}
+
+	topics := klists.ToKSlice(conf.Topics)
+	topics = QueryTopics(client, topics...)
+
+	queue, err := ksync.NewLockedRingBuffer[*KafkaMessage](uint64(bufferSize))
+	if err != nil {
+		if logf != nil {
+			logf(klog.ErrorLevel, kafka_tag, "Create kafka subscribe queue failed: %s", err.Error())
+		}
+		return nil, err
+	}
+
+	subCtx := ctx.NewChild("kafka_group_consumer")
+	return &ConsumerGroup{
+		ctx:        subCtx,
+		conf:       conf,
+		group:      group,
+		brokerList: brokerList,
+		topics:     topics,
+		bufferSize: bufferSize,
+		queue:      queue,
+		logf:       logf,
+	}, nil
+}
+
+func (that *ConsumerGroup) Subscribe() {
+	go that.SyncSubscribe()
+}
+
+// Subscribe 订阅Kafka主题并异步处理消息。从最新偏移量开始收取消息。该函数会阻塞, 直到 Close() 被调用。
+//   - @param callback: 当收到新消息时要调用的函数。
+func (that *ConsumerGroup) SyncSubscribe() {
+	that.wg.Add(1)
+	defer that.wg.Done()
+
+	// 这样可以确保处理协程（subCtx 里的 for 循环）能够被唤醒并退出。
+	defer that.queue.Close() // 无论发生什么，SyncSubscribe 退出时必须关闭队列，
+
+	tmpCtx := that.ctx.NewChild("kafka_group_consumer_tmp")
+
+	topicNameList := make([]string, 0, len(that.topics))
+	for _, topic := range that.topics {
+		topicNameList = append(topicNameList, topic.Name)
+	}
+
+	msgHandler := that.conf.Consumer.MainHandler()
+	consumerHandler := func(voidObj any, msg *KafkaMessage) {
+		if msgHandler != nil {
+			msgHandler(voidObj, msg)
+		}
+	}
+
+	// 定义消费者组处理程序
+	// handler := &privateConsumerGroupHandler{parentCtx: that.ctx, queue: that.queue, topics: that.topics, callback: callback, voidObj: voidObj, bufferSize: that.bufferSize}
+	handler := &privateConsumerGroupHandler{parentCtx: that.ctx, queue: that.queue, topics: that.topics, AutoCommit: that.conf.Consumer.AutoCommit, bufferSize: that.bufferSize}
+	go func(ctx *kcontext.ContextNode, topics []string, handler *privateConsumerGroupHandler) {
+		for {
+			if err := that.group.Consume(that.ctx.Context(), topics, handler); err != nil {
+				if that.logf != nil {
+					that.logf(klog.ErrorLevel, kafka_tag, "kafka.ConsumerGroup error: %s", err.Error())
+				}
+			}
+
+			// 检查上下文是否被取消，如果是，函数传入的上下文被取消
+			if ctx.Context().Err() != nil {
+				break
+			}
+		}
+	}(tmpCtx, topicNameList, handler)
+
+	subCtx := that.ctx.NewChild("kafka_group_consumer_child")
+	go func(ctx *kcontext.ContextNode) {
+		buffer := make([]*KafkaMessage, that.bufferSize)
+		for {
+			// 使用阻塞式 DequeueTo。
+			// 退出逻辑：当 queue.Close() 被调用且数据排干后，n 会返回 0。
+			n := that.queue.DequeueTo(buffer)
+			if n <= 0 {
+				break
+			}
+
+			for _, msg := range buffer[:n] {
+				consumerHandler(that, msg)
+				// 标记位点。统一由处理协程标记，职责单一，避免 Cleanup 并发竞争。
+				if msg.session != nil && that.conf.Consumer.AutoCommit == AUTO_COMMIT_NONE {
+					msg.session.MarkOffset(msg.Topic, msg.Partition, msg.Offset+1, "")
+				}
+			}
+
+			if ctx.Context().Err() != nil {
+				break
+			}
+		}
+	}(subCtx)
+
+	if that.conf != nil && that.conf.OnReady != nil {
+		that.conf.OnReady(true)
+	}
+
+	<-that.ctx.Context().Done() // 阻塞等待外部取消信号
+	that.group.PauseAll()       // 停止从 Broker 拉取
+	tmpCtx.Cancel()             // 此时 tmpCtx 取消会导致 Consume 返回，随后触发 handler.Cleanup
+
+	if err := that.group.Close(); err != nil {
+		if that.logf != nil {
+			that.logf(klog.ErrorLevel, kafka_tag, "Error closing client: %s", err.Error())
+		}
+	}
+
+	that.queue.Close() // 显式关闭队列，确保 Dequeue 循环退出
+
+	subCtx.Cancel()
+	tmpCtx.Remove()
+	subCtx.Remove()
+
+	if that.conf.OnExit != nil {
+		that.conf.OnExit(nil)
+	}
+}
+
+func (that *ConsumerGroup) Close() {
+	if that.ctx == nil {
+		return
+	}
+
+	that.ctx.Cancel() // 发出停止信号
+	that.wg.Wait()    // 等待 SyncSubscribe 跑完所有清理逻辑退出
+	// that.group.Close()
+	that.ctx.Remove()
+}
+
+/////////////////////////////////////////////////////////////
+
+// ConsumerGroupHandler 实例用于处理单个 topic/partition 的声明。
+// 它还提供了用于处理消费者组会话生命周期的钩子，并允许在消费循环(s)之前或之后触发逻辑。
+//
+// 请注意，处理程序很可能从多个 goroutine 同时并发调用，
+// 确保所有状态都安全地防止竞争条件。
+type privateConsumerGroupHandler struct {
+	parentCtx *kcontext.ContextNode
+	queue     *ksync.LockedRingBuffer[*KafkaMessage] // 消息队列
+	topics    []*Topic
+
+	// callback   MessageHandler
+	// voidObj    any
+	bufferSize uint
+	AutoCommit string
+	once       sync.Once
+}
+
+// Setup 是在新的会话开始之前调用的，在 ConsumeClaim 之前。
+func (that *privateConsumerGroupHandler) Setup(session sarama.ConsumerGroupSession) error {
+	that.once.Do(func() {
+		// 1. 获取当前消费者被分配到的所有 Topic 和 Partition 映射
+		claims := session.Claims()
+		for topicName, partitions := range claims {
+			for _, topic := range that.topics {
+				// 2. 只有在当前分配到的 Topic 中寻找匹配项
+				if topic.Name != topicName {
+					continue
+				}
+
+				for partition, offset := range topic.Partition {
+					if !slices.Contains(partitions, partition) {
+						continue
+					}
+
+					if offset >= 0 {
+						session.ResetOffset(topic.Name, partition, offset, "")
+						// session.MarkOffset(topic.Name, partition, offset, "")
+					}
+				}
+			}
+		}
+	})
+	return nil
+}
+
+// Cleanup 是在会话结束之前运行的，在所有 ConsumeClaim 协程退出之后，
+// 但在最后一次提交偏移量之前。
+func (that *privateConsumerGroupHandler) Cleanup(session sarama.ConsumerGroupSession) error {
+	// 检查是否是用户主动关闭了 context
+	isClosing := that.isParentCtxDone()
+	if isClosing {
+		// 无论是否是主动关闭，Cleanup 的唯一核心职责是“发信号”
+		// 只有在主动关闭时才调用 Close() 破坏阻塞，触发处理协程排干数据并退出
+		that.queue.Close()
+	}
+
+	return nil
+}
+
+// ConsumeClaim 必须启动 ConsumerGroupClaim 的 Messages() 消费循环。
+// 一旦 Messages() 通道被关闭，Handler 必须完成其消息处理循环并退出。
+func (that *privateConsumerGroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
+	for msg := range claim.Messages() {
+		kafkMsg := &KafkaMessage{Topic: msg.Topic, Partition: msg.Partition, Offset: msg.Offset, Key: msg.Key, Value: msg.Value, session: session}
+		// 1. 先检查 Sarama 或者是你全局的 Context 是否已经结束，结束了就没必要入队了
+		if session.Context().Err() != nil {
+			return nil
+		}
+
+		// 2. 入队成功, 此处如果阻塞时间太长会导致无法响应
+		if ok := that.queue.Enqueue(kafkMsg); ok {
+			if that.AutoCommit != AUTO_COMMIT_NONE {
+				session.MarkMessage(msg, "")
+				if that.AutoCommit == AUTO_COMMIT_CUSTOM && msg.Offset%500 == 0 {
+					session.Commit() // 提交偏移量到 Kafka
+				}
+			}
+		} else {
+			// queue 被关闭, 直接退出
+			break
+		}
+
+	}
+	return nil
+}
+
+// 辅助函数：判断外部大的上下文是否已经取消
+func (that *privateConsumerGroupHandler) isParentCtxDone() bool {
+	select {
+	case <-that.parentCtx.Context().Done():
+		return true
+	default:
+		return false
+	}
+}

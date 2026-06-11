@@ -1,2 +1,8 @@
 # kmq-utils
-多种mq client的golang峰值
+多种mq 客户端封装, 支持多种MQ
+1. RocketMQ
+2. RabbitMQ
+3. RedisMQ
+4. Kafka
+5. MQTT - 支持mqtt 3.1 和 mqtt 3.1.1协议, mqtt5不支持
+6. NATS - 支持NATS Core 和 部分支持 NATS JetStream模式的push模式, 基于nats server 2.11.7进行测试

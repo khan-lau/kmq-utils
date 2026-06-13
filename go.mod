@@ -6,7 +6,7 @@ require (
 	github.com/IBM/sarama v1.46.3
 	github.com/apache/rocketmq-client-go/v2 v2.1.2
 	github.com/eclipse/paho.mqtt.golang v1.5.1
-	github.com/khan-lau/kutils v0.5.6
+	github.com/khan-lau/kutils v0.5.7
 	github.com/nats-io/nats.go v1.49.0
 	github.com/wagslane/go-rabbitmq v0.15.0
 )

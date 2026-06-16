@@ -23,7 +23,7 @@ func NewConsumer(conf *RabbitConfig, logf klog.AppLogFuncWithTag) (*Consumer, er
 
 	if len(conf.Addrs) == 0 {
 		if logf != nil {
-			logf(klog.ErrorLevel, rabbit_tag, "RabbitMQ config addrs is empty")
+			logf(klog.ErrorLevel, RabbitLogTag, "RabbitMQ config addrs is empty")
 		}
 		return nil, ErrEmptyAddrs
 	}
@@ -122,7 +122,7 @@ func (that *Consumer) SyncSubscribe() {
 
 	if err != nil {
 		if that.logf != nil && !that.isClosed.Load() { // 仅在非主动关闭时记录错误
-			that.logf(klog.ErrorLevel, rabbit_tag, "consumer error: %v", err)
+			that.logf(klog.ErrorLevel, RabbitLogTag, "consumer error: %v", err)
 		}
 	}
 	if that.conf.OnExit != nil {

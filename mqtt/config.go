@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	mqtt_tag = "mqtt"
+	MqttLogTag = "mqtt"
 )
 
 var (

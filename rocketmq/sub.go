@@ -176,7 +176,7 @@ END_LOOP:
 			break END_LOOP
 		case err := <-consumerErrChan:
 			if that.logf != nil {
-				that.logf(klog.ErrorLevel, rocket_tag, "Start consumer error: %s", err.Error())
+				that.logf(klog.ErrorLevel, RocketLogTag, "Start consumer error: %s", err.Error())
 			}
 			break END_LOOP
 		default:
@@ -195,7 +195,7 @@ END_LOOP:
 	remainLen := that.queue.Len()
 	// 只有在 Start 成功且收到退出信号时才会走到这里
 	if that.logf != nil {
-		that.logf(klog.InfoLevel, rocket_tag, "Draining remaining %s messages...", remainLen)
+		that.logf(klog.InfoLevel, RocketLogTag, "Draining remaining %s messages...", remainLen)
 	}
 
 	remainMsgs := make([]*Message, remainLen)
@@ -205,7 +205,7 @@ END_LOOP:
 		msgHandler(that, msg)
 	}
 	if that.logf != nil {
-		that.logf(klog.InfoLevel, rocket_tag, "Drain completed.")
+		that.logf(klog.InfoLevel, RocketLogTag, "Drain completed.")
 	}
 
 	if that.conf.OnExit != nil {
@@ -227,7 +227,7 @@ func (that *PushConsumer) Close() {
 	that.queue.Close()
 	err := that.mqConsumer.Shutdown()
 	if err != nil && that.logf != nil {
-		that.logf(klog.ErrorLevel, rocket_tag, "Shutdown consumer error: %s", err.Error())
+		that.logf(klog.ErrorLevel, RocketLogTag, "Shutdown consumer error: %s", err.Error())
 	}
 
 	// 这样可以确保主程序在 Close 返回后，数据已经全处理完了
@@ -356,7 +356,7 @@ func NewPullConsumer(ctx *kcontext.ContextNode, chanSize uint, conf *RocketConfi
 				msgs, err := tConsumer.pull(ctx, int(pullSize))
 				if err != nil {
 					if logf != nil {
-						logf(klog.ErrorLevel, rocket_tag, "consumer pull error: %s", err.Error())
+						logf(klog.ErrorLevel, RocketLogTag, "consumer pull error: %s", err.Error())
 					}
 				} else {
 					for _, msg := range msgs {
@@ -461,7 +461,7 @@ END_LOOP:
 			break END_LOOP
 		case err := <-consumerErrChan:
 			if that.logf != nil {
-				that.logf(klog.ErrorLevel, rocket_tag, "Start consumer error: %s", err.Error())
+				that.logf(klog.ErrorLevel, RocketLogTag, "Start consumer error: %s", err.Error())
 			}
 			break END_LOOP
 		default:
@@ -476,7 +476,7 @@ END_LOOP:
 	remainLen := that.queue.Len()
 	// 只有在 Start 成功且收到退出信号时才会走到这里
 	if that.logf != nil {
-		that.logf(klog.InfoLevel, rocket_tag, "Draining remaining %s messages...", remainLen)
+		that.logf(klog.InfoLevel, RocketLogTag, "Draining remaining %s messages...", remainLen)
 	}
 
 	remainMsgs := make([]*Message, remainLen)
@@ -486,7 +486,7 @@ END_LOOP:
 		msgHandler(that, msg)
 	}
 	if that.logf != nil {
-		that.logf(klog.InfoLevel, rocket_tag, "Drain completed.")
+		that.logf(klog.InfoLevel, RocketLogTag, "Drain completed.")
 	}
 
 	if that.conf.OnExit != nil {
@@ -518,7 +518,7 @@ func (that *PullConsumer) Close() {
 	// 5. 停止底层 Client (Shutdown 会等待拉取动作返回)
 	err := that.mqConsumer.Shutdown()
 	if err != nil && that.logf != nil {
-		that.logf(klog.ErrorLevel, rocket_tag, "Shutdown consumer error: %s", err.Error())
+		that.logf(klog.ErrorLevel, RocketLogTag, "Shutdown consumer error: %s", err.Error())
 	}
 
 	// 6. 核心：等待 SyncSubscribe 排水完毕后再返回

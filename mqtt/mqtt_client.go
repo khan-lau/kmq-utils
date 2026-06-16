@@ -43,7 +43,7 @@ func NewMqttClient(ctx *kcontext.ContextNode, queueSize uint, conf *Config, logf
 	queue, err := ksync.NewLockedRingBuffer[*MqttMessage](uint64(queueSize))
 	if err != nil {
 		if logf != nil {
-			logf(klog.ErrorLevel, mqtt_tag, "Create mqtt queue failed: %s", err.Error())
+			logf(klog.ErrorLevel, MqttLogTag, "Create mqtt queue failed: %s", err.Error())
 		}
 		return nil, err
 	}
@@ -100,17 +100,17 @@ func (that *MqttClient) Start() error {
 		if that.conf.caCertPath != "" {
 			caCert, err := os.ReadFile(that.conf.caCertPath)
 			if err != nil {
-				that.logf(klog.ErrorLevel, mqtt_tag, "Failed to read CA cert: %v", err)
+				that.logf(klog.ErrorLevel, MqttLogTag, "Failed to read CA cert: %v", err)
 				return err
 			}
 			certPool := x509.NewCertPool()
 			if !certPool.AppendCertsFromPEM(caCert) {
-				that.logf(klog.ErrorLevel, mqtt_tag, "%v", ErrParseCA)
+				that.logf(klog.ErrorLevel, MqttLogTag, "%v", ErrParseCA)
 				return ErrParseCA
 			}
 			tlsConfig.RootCAs = certPool
 		} else {
-			that.logf(klog.ErrorLevel, mqtt_tag, "%v", ErrNoCAProvided)
+			that.logf(klog.ErrorLevel, MqttLogTag, "%v", ErrNoCAProvided)
 			return ErrNoCAProvided
 		}
 		opts.SetTLSConfig(tlsConfig)
@@ -119,7 +119,7 @@ func (that *MqttClient) Start() error {
 	// 连接成功事件, 连接鉴权成功后才可以开始进行后续的指令操作
 	opts.SetOnConnectHandler(func(c paho.Client) {
 		if that.logf != nil {
-			that.logf(klog.InfoLevel, mqtt_tag, "mqtt %s %s connect success", that.conf.ClientId(), that.conf.Broker())
+			that.logf(klog.InfoLevel, MqttLogTag, "mqtt %s %s connect success", that.conf.ClientId(), that.conf.Broker())
 		}
 
 		that.connected.Store(true)
@@ -136,21 +136,21 @@ func (that *MqttClient) Start() error {
 	opts.OnConnectionLost = func(c paho.Client, err error) {
 		that.connected.Store(false)
 		if that.logf != nil {
-			that.logf(klog.WarnLevel, mqtt_tag, "MQTT connection lost: %s", err.Error())
+			that.logf(klog.WarnLevel, MqttLogTag, "MQTT connection lost: %s", err.Error())
 		}
 	}
 
 	// 重连事件
 	opts.SetReconnectingHandler(func(c paho.Client, option *paho.ClientOptions) {
 		if that.logf != nil {
-			that.logf(klog.DebugLevel, mqtt_tag, "mqtt %s %s reconnecting", that.conf.ClientId(), that.conf.Broker())
+			that.logf(klog.DebugLevel, MqttLogTag, "mqtt %s %s reconnecting", that.conf.ClientId(), that.conf.Broker())
 		}
 	})
 
 	// 全局 MQTT pub 消息处理, subscribe 操作时没有指定明确回调函数的, 都会走这里处理
 	opts.SetDefaultPublishHandler(func(client paho.Client, msg paho.Message) {
 		if that.logf != nil {
-			that.logf(klog.DebugLevel, mqtt_tag, "mqtt %s %s receive message: %s", that.conf.ClientId(), that.conf.Broker(), string(msg.Payload()))
+			that.logf(klog.DebugLevel, MqttLogTag, "mqtt %s %s receive message: %s", that.conf.ClientId(), that.conf.Broker(), string(msg.Payload()))
 		}
 	})
 
@@ -158,7 +158,7 @@ func (that *MqttClient) Start() error {
 	that.client = client
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
 		if that.logf != nil {
-			that.logf(klog.ErrorLevel, mqtt_tag, "mqtt %s %s connect error: %s", that.conf.ClientId(), that.conf.Broker(), token.Error())
+			that.logf(klog.ErrorLevel, MqttLogTag, "mqtt %s %s connect error: %s", that.conf.ClientId(), that.conf.Broker(), token.Error())
 		}
 	}
 
@@ -248,11 +248,11 @@ func (that *MqttClient) syncSubscriptions() {
 	// 阻塞等待订阅完成
 	if token.Wait() && token.Error() != nil {
 		if that.logf != nil {
-			that.logf(klog.ErrorLevel, mqtt_tag, "mqtt %s subscribe fault: %s", that.conf.ClientId(), token.Error())
+			that.logf(klog.ErrorLevel, MqttLogTag, "mqtt %s subscribe fault: %s", that.conf.ClientId(), token.Error())
 		}
 	} else {
 		if that.logf != nil {
-			that.logf(klog.InfoLevel, mqtt_tag, "mqtt %s subscribe topics: [%s] finished", that.conf.ClientId(), strings.Join(topics, ", "))
+			that.logf(klog.InfoLevel, MqttLogTag, "mqtt %s subscribe topics: [%s] finished", that.conf.ClientId(), strings.Join(topics, ", "))
 		}
 	}
 }

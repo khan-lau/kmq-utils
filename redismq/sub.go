@@ -32,7 +32,7 @@ type RedisSub struct {
 func NewRedisSub(ctx *kcontext.ContextNode, bufferSize uint, conf *RedisConfig, logf klog.AppLogFuncWithTag) *RedisSub {
 	if len(conf.Addrs) == 0 {
 		if logf != nil {
-			logf(klog.ErrorLevel, redis_tag, "redis config addrs is empty")
+			logf(klog.ErrorLevel, RedisLogTag, "redis config addrs is empty")
 		}
 		return nil
 	}
@@ -61,24 +61,24 @@ func (that *RedisSub) Subscribe() {
 func (that *RedisSub) SyncSubscribe() {
 	if !that.started.CompareAndSwap(false, true) {
 		if that.logf != nil {
-			that.logf(klog.WarnLevel, redis_tag, "RedisSub already started")
+			that.logf(klog.WarnLevel, RedisLogTag, "RedisSub already started")
 		}
 		return
 	}
 
 	if that.logf != nil {
-		that.logf(klog.InfoLevel, redis_tag, "RedisSub starting...")
+		that.logf(klog.InfoLevel, RedisLogTag, "RedisSub starting...")
 	}
 
 	that.reconnectLoop(func() {
 		if that.logf != nil {
-			that.logf(klog.InfoLevel, redis_tag, "Consumer mode connected, starting subscription...")
+			that.logf(klog.InfoLevel, RedisLogTag, "Consumer mode connected, starting subscription...")
 		}
 		that.startSubscription() // 连接成功后启动订阅
 	})
 
 	if that.logf != nil {
-		that.logf(klog.InfoLevel, redis_tag, "RedisSub stopped")
+		that.logf(klog.InfoLevel, RedisLogTag, "RedisSub stopped")
 	}
 }
 
@@ -93,7 +93,7 @@ func (that *RedisSub) Close() {
 	that.wg.Wait()
 
 	if that.logf != nil {
-		that.logf(klog.InfoLevel, redis_tag, "Client stopped")
+		that.logf(klog.InfoLevel, RedisLogTag, "Client stopped")
 	}
 }
 
@@ -109,7 +109,7 @@ func (that *RedisSub) reconnectLoop(onConected func()) {
 	for {
 		if that.draining.Load() {
 			if that.logf != nil {
-				that.logf(klog.InfoLevel, redis_tag, "draining → exit reconnect loop")
+				that.logf(klog.InfoLevel, RedisLogTag, "draining → exit reconnect loop")
 			}
 			// 正在关闭中，退出循环
 			// 清理资源
@@ -127,7 +127,7 @@ func (that *RedisSub) reconnectLoop(onConected func()) {
 		// 尝试连接
 		if that.dbConnect() {
 			if that.logf != nil {
-				that.logf(klog.InfoLevel, redis_tag, "connected")
+				that.logf(klog.InfoLevel, RedisLogTag, "connected")
 			}
 			if onConected != nil {
 				onConected()
@@ -137,7 +137,7 @@ func (that *RedisSub) reconnectLoop(onConected func()) {
 
 		err := fmt.Errorf("connect to redis %s - %d faulted", that.conf.Addrs[0], that.conf.DB)
 		if that.logf != nil {
-			that.logf(klog.ErrorLevel, redis_tag, "%v", err.Error())
+			that.logf(klog.ErrorLevel, RedisLogTag, "%v", err.Error())
 		}
 
 		time.Sleep(reconnectInterval * time.Millisecond)
@@ -176,7 +176,7 @@ func (that *RedisSub) onError(err error) {
 		that.conf.OnError(err)
 	}
 	if that.logf != nil {
-		that.logf(klog.WarnLevel, redis_tag, "%v", err)
+		that.logf(klog.WarnLevel, RedisLogTag, "%v", err)
 	}
 	// 重要：只标记连接断开，让 reconnectLoop 自动重连
 	// 不要调用 stop()，否则会永久停止
@@ -207,7 +207,7 @@ func (that *RedisSub) startSubscription() {
 				msg, err := that.receivedMessage(topic, payload)
 				if nil != err {
 					if that.logf != nil {
-						that.logf(klog.WarnLevel, redis_tag, "Subscribe reids topic error: %v", err)
+						that.logf(klog.WarnLevel, RedisLogTag, "Subscribe reids topic error: %v", err)
 					}
 				} else {
 					msgHandler(that, msg)

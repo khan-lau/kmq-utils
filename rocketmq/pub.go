@@ -74,7 +74,7 @@ func NewProducer(ctx *kcontext.ContextNode, queueSize uint, conf *RocketConfig, 
 	queue, err := ksync.NewLockedRingBuffer[*RocketMessage](uint64(queueSize))
 	if err != nil {
 		if logf != nil {
-			logf(klog.ErrorLevel, rocket_tag, "Create rocketmq publish queue failed: %s", err.Error())
+			logf(klog.ErrorLevel, RocketLogTag, "Create rocketmq publish queue failed: %s", err.Error())
 		}
 		return nil, err
 	}
@@ -108,9 +108,9 @@ func (that *Producer) Start() {
 	go func(mqProducer rocket.Producer) {
 		err := mqProducer.Start()
 		if err != nil && that.logf != nil {
-			that.logf(klog.ErrorLevel, rocket_tag, "Start producer error: %s", err.Error())
+			that.logf(klog.ErrorLevel, RocketLogTag, "Start producer error: %s", err.Error())
 		} else if that.logf != nil {
-			that.logf(klog.InfoLevel, rocket_tag, "Start producer successfully")
+			that.logf(klog.InfoLevel, RocketLogTag, "Start producer successfully")
 		}
 	}(that.mqProducer)
 
@@ -188,11 +188,11 @@ func (that *Producer) Close() {
 	select {
 	case <-done:
 		if that.logf != nil {
-			that.logf(klog.InfoLevel, rocket_tag, "RocketMQ buffer drained successfully")
+			that.logf(klog.InfoLevel, RocketLogTag, "RocketMQ buffer drained successfully")
 		}
 	case <-time.After(20 * time.Second):
 		if that.logf != nil {
-			that.logf(klog.WarnLevel, rocket_tag, "RocketMQ drain timeout, forcing shutdown")
+			that.logf(klog.WarnLevel, RocketLogTag, "RocketMQ drain timeout, forcing shutdown")
 		}
 
 	}
@@ -240,7 +240,7 @@ func (that *Producer) drainPublish(msg *RocketMessage) error {
 	_, err = that.mqProducer.SendSync(that.ctx.Context(), mqMessage)
 	if err != nil {
 		if that.logf != nil {
-			that.logf(klog.ErrorLevel, rocket_tag, "Send message error: %s", err.Error())
+			that.logf(klog.ErrorLevel, RocketLogTag, "Send message error: %s", err.Error())
 		}
 		if that.conf.OnError != nil {
 			that.conf.OnError(err)
@@ -259,7 +259,7 @@ func (that *Producer) publish(msg *RocketMessage) error {
 		err = that.mqProducer.SendAsync(that.ctx.Context(), func(ctx context.Context, result *primitive.SendResult, err error) {
 			if err != nil {
 				if that.logf != nil {
-					that.logf(klog.ErrorLevel, rocket_tag, "Send message error: %s", err.Error())
+					that.logf(klog.ErrorLevel, RocketLogTag, "Send message error: %s", err.Error())
 				}
 
 				if that.conf.OnError != nil {
@@ -271,7 +271,7 @@ func (that *Producer) publish(msg *RocketMessage) error {
 		_, err = that.mqProducer.SendSync(that.ctx.Context(), mqMessage)
 		if err != nil {
 			if that.logf != nil {
-				that.logf(klog.ErrorLevel, rocket_tag, "Send message error: %s", err.Error())
+				that.logf(klog.ErrorLevel, RocketLogTag, "Send message error: %s", err.Error())
 			}
 			if that.conf.OnError != nil {
 				that.conf.OnError(err)

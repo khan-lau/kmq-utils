@@ -67,7 +67,7 @@ func NewAsyncProducer(ctx *kcontext.ContextNode, queueSize uint, conf *Config, l
 	// 若通过环境变量提供了 Kerberos 配置，则启用 Kerberos 认证
 	if err := applyProducerKerberosEnv(config); err != nil {
 		if logf != nil {
-			logf(klog.ErrorLevel, kafka_tag, "enable Kerberos failed: %s", err.Error())
+			logf(klog.ErrorLevel, KafkaLogTag, "enable Kerberos failed: %s", err.Error())
 		}
 		return nil, err
 	}
@@ -76,7 +76,7 @@ func NewAsyncProducer(ctx *kcontext.ContextNode, queueSize uint, conf *Config, l
 	producer, err := sarama.NewAsyncProducer(brokerList, config)
 	if err != nil {
 		if logf != nil {
-			logf(klog.ErrorLevel, kafka_tag, "kafka.NewAsyncProducer error: %s", err.Error())
+			logf(klog.ErrorLevel, KafkaLogTag, "kafka.NewAsyncProducer error: %s", err.Error())
 		}
 		return nil, err
 	}
@@ -84,7 +84,7 @@ func NewAsyncProducer(ctx *kcontext.ContextNode, queueSize uint, conf *Config, l
 	queue, err := ksync.NewLockedRingBuffer[KafkaMessage](uint64(queueSize))
 	if err != nil {
 		if logf != nil {
-			logf(klog.ErrorLevel, kafka_tag, "Create kafka publish queue failed: %s", err.Error())
+			logf(klog.ErrorLevel, KafkaLogTag, "Create kafka publish queue failed: %s", err.Error())
 		}
 		return nil, err
 	}
@@ -122,7 +122,7 @@ func (that *AsyncProducer) Start() {
 				if that.logf != nil {
 					if KafkaTraceFlag {
 						byteArr, _ := success.Value.Encode() // 比较耗时, 调试期间才需要
-						that.logf(klog.DebugLevel, kafka_tag, "Message sent to Kafka topic %s, partition %d, offset %d msg: %s", success.Topic, success.Partition, success.Offset, string(byteArr))
+						that.logf(klog.DebugLevel, KafkaLogTag, "Message sent to Kafka topic %s, partition %d, offset %d msg: %s", success.Topic, success.Partition, success.Offset, string(byteArr))
 					}
 				}
 			case err, ok := <-errorsChan:
@@ -130,7 +130,7 @@ func (that *AsyncProducer) Start() {
 					return
 				}
 				if that.logf != nil {
-					that.logf(klog.ErrorLevel, kafka_tag, "Failed to send message to Kafka topic %s, partition %d: %s", err.Msg.Topic, err.Msg.Partition, err.Err.Error())
+					that.logf(klog.ErrorLevel, KafkaLogTag, "Failed to send message to Kafka topic %s, partition %d: %s", err.Msg.Topic, err.Msg.Partition, err.Err.Error())
 				}
 				if that.conf.OnError != nil {
 					that.conf.OnError(err)
@@ -236,7 +236,7 @@ func (that *AsyncProducer) Close() {
 	if that.Producer != nil {
 		if err := that.Producer.Close(); err != nil {
 			if that.logf != nil {
-				that.logf(klog.ErrorLevel, kafka_tag, "Error closing sarama producer: %s", err.Error())
+				that.logf(klog.ErrorLevel, KafkaLogTag, "Error closing sarama producer: %s", err.Error())
 			}
 		}
 	}

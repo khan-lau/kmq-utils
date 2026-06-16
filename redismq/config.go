@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	redis_tag = "redismq"
+	RedisLogTag = "redismq"
 )
 
 var (

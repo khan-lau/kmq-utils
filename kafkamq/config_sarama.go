@@ -28,7 +28,8 @@ const (
 )
 
 const (
-	kafka_tag = "kafka"
+	KafkaLogTag             = "kafka"
+	KafkaGroupHandlerLogTag = "kafka_handler"
 )
 
 var (

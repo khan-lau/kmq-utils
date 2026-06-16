@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	rocket_tag = "rocketmq"
+	RocketLogTag = "rocketmq"
 
 	AUTO_COMMIT_NATIVE = "native" // 原生自动提交
 	AUTO_COMMIT_CUSTOM = "custom" // 客户端实现自动提交

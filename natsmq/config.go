@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	natsmq_tag = "natsmq"
+	NatsLogTag = "natsmq"
 
 	AUTO_COMMIT_NATIVE = "native" // 原生自动提交
 	AUTO_COMMIT_CUSTOM = "custom" // 客户端实现自动提交

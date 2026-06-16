@@ -45,7 +45,7 @@ func NewNatsCoreClient(ctx *kcontext.ContextNode, queueSize uint, conf *NatsClie
 	queue, err := ksync.NewLockedRingBuffer[*NatsMessage](uint64(queueSize))
 	if err != nil {
 		if logf != nil {
-			logf(klog.ErrorLevel, natsmq_tag, "Create natsmq queue failed: %s", err.Error())
+			logf(klog.ErrorLevel, NatsLogTag, "Create natsmq queue failed: %s", err.Error())
 		}
 		return nil, err
 	}
@@ -172,7 +172,7 @@ func (that *NatsCoreClient) doConnect() error {
 		cert, err := tls.LoadX509KeyPair(that.conf.Nats().TlsClientCert(), that.conf.Nats().KeyPath())
 		if err != nil {
 			if that.logf != nil {
-				that.logf(klog.WarnLevel, natsmq_tag, "Error parsing X509 certificate/key pair: %v", err)
+				that.logf(klog.WarnLevel, NatsLogTag, "Error parsing X509 certificate/key pair: %v", err)
 			}
 			return err
 		}
@@ -193,7 +193,7 @@ func (that *NatsCoreClient) doConnect() error {
 			systemCertPool, err = x509.SystemCertPool()
 			if err != nil {
 				if that.logf != nil {
-					that.logf(klog.WarnLevel, natsmq_tag, "Warning: Could not load system root CA pool: %v. Using empty pool.", err)
+					that.logf(klog.WarnLevel, NatsLogTag, "Warning: Could not load system root CA pool: %v. Using empty pool.", err)
 				}
 				systemCertPool = x509.NewCertPool()
 			}
@@ -226,7 +226,7 @@ func (that *NatsCoreClient) doConnect() error {
 	conn, err := nats.Connect(strings.Join(that.conf.nats.Servers(), ","), opts...) // 连接NATS服务器, 允许同时连接多个服务器地址, 逗号分隔
 	if err != nil {
 		if that.logf != nil {
-			that.logf(klog.WarnLevel, natsmq_tag, "Connect error: %v", err)
+			that.logf(klog.WarnLevel, NatsLogTag, "Connect error: %v", err)
 		}
 
 		if that.conf.OnError() != nil {
@@ -283,7 +283,7 @@ func (that *NatsCoreClient) startDrainPipe() {
 							// 如果你希望“死等”，就继续 Sleep
 							// 如果你希望“超时放弃”，可以通过检查一个时间戳来决定是否 return
 							if that.logf != nil {
-								that.logf(klog.WarnLevel, natsmq_tag, "Drain failed due to disconnected link, dropping remaining messages.")
+								that.logf(klog.WarnLevel, NatsLogTag, "Drain failed due to disconnected link, dropping remaining messages.")
 							}
 							return
 						}
@@ -327,14 +327,14 @@ func (that *NatsCoreClient) syncSubscriptions() error {
 
 		if err != nil {
 			if that.logf != nil {
-				that.logf(klog.WarnLevel, natsmq_tag, "%s topic: %s, error: %v", (condexpr.CondExpr(len(that.conf.CoreNats().QueueGroup()) > 0, "QueueSubscribe", "Subscribe")), topic, err)
+				that.logf(klog.WarnLevel, NatsLogTag, "%s topic: %s, error: %v", (condexpr.CondExpr(len(that.conf.CoreNats().QueueGroup()) > 0, "QueueSubscribe", "Subscribe")), topic, err)
 			}
 		} else {
 			if err := sub.SetPendingLimits(that.conf.CoreNats().maxPending, -1); err == nil { // 设置消息队列大小限制, 字节数无限制
 				that.subs[topic] = sub
 			} else {
 				if that.logf != nil {
-					that.logf(klog.WarnLevel, natsmq_tag, "SetPendingLimits error: %v", err)
+					that.logf(klog.WarnLevel, NatsLogTag, "SetPendingLimits error: %v", err)
 				}
 			}
 		}

@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	loggingPrefix = "RABBIT"
-	rabbit_tag    = "rabbitmq"
+	RabbitLogPrefix = "RABBIT"
+	RabbitLogTag    = "rabbitmq"
 )
 
 const (
@@ -48,35 +48,35 @@ type GoRabbitLogger struct {
 // Fatalf -
 func (that GoRabbitLogger) Fatalf(format string, v ...any) {
 	if that.logf != nil {
-		that.logf(klog.FatalLevel, loggingPrefix, format, v...)
+		that.logf(klog.FatalLevel, RabbitLogPrefix, format, v...)
 	}
 }
 
 // Errorf -
 func (that GoRabbitLogger) Errorf(format string, v ...any) {
 	if that.logf != nil {
-		that.logf(klog.ErrorLevel, loggingPrefix, format, v...)
+		that.logf(klog.ErrorLevel, RabbitLogPrefix, format, v...)
 	}
 }
 
 // Warnf -
 func (that GoRabbitLogger) Warnf(format string, v ...any) {
 	if that.logf != nil {
-		that.logf(klog.WarnLevel, loggingPrefix, format, v...)
+		that.logf(klog.WarnLevel, RabbitLogPrefix, format, v...)
 	}
 }
 
 // Infof -
 func (that GoRabbitLogger) Infof(format string, v ...any) {
 	if that.logf != nil {
-		that.logf(klog.InfoLevel, loggingPrefix, format, v...)
+		that.logf(klog.InfoLevel, RabbitLogPrefix, format, v...)
 	}
 }
 
 // Debugf -
 func (that GoRabbitLogger) Debugf(format string, v ...any) {
 	if that.logf != nil {
-		that.logf(klog.DebugLevel, loggingPrefix, format, v...)
+		that.logf(klog.DebugLevel, RabbitLogPrefix, format, v...)
 	}
 }
 

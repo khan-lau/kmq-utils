@@ -34,13 +34,13 @@ func NewProducer(ctx *kcontext.ContextNode, queueSize uint, conf *RabbitConfig, 
 	queue, err := ksync.NewLockedRingBuffer[*RabbitMessage](uint64(queueSize))
 	if err != nil {
 		if logf != nil {
-			logf(klog.ErrorLevel, rabbit_tag, "Create rabbit publish queue failed: %s", err.Error())
+			logf(klog.ErrorLevel, RabbitLogTag, "Create rabbit publish queue failed: %s", err.Error())
 		}
 		return nil, err
 	}
 	if len(conf.Addrs) == 0 {
 		if logf != nil {
-			logf(klog.ErrorLevel, rabbit_tag, "RabbitMQ config addrs is empty")
+			logf(klog.ErrorLevel, RabbitLogTag, "RabbitMQ config addrs is empty")
 		}
 		return nil, ErrEmptyAddrs
 	}
@@ -79,13 +79,13 @@ func (that *Producer) Start() {
 
 	that.publisher.NotifyReturn(func(r rabbitmq.Return) {
 		if that.logf != nil {
-			that.logf(klog.DebugLevel, rabbit_tag, "message returned from server: %s", string(r.Body))
+			that.logf(klog.DebugLevel, RabbitLogTag, "message returned from server: %s", string(r.Body))
 		}
 	})
 
 	that.publisher.NotifyPublish(func(c rabbitmq.Confirmation) {
 		if that.logf != nil {
-			that.logf(klog.DebugLevel, rabbit_tag, "message confirmed from server. tag: %d, ack: %d", c.DeliveryTag, c.Ack)
+			that.logf(klog.DebugLevel, RabbitLogTag, "message confirmed from server. tag: %d, ack: %d", c.DeliveryTag, c.Ack)
 		}
 	})
 
@@ -154,11 +154,11 @@ func (that *Producer) Close() {
 	select {
 	case <-done:
 		if that.logf != nil {
-			that.logf(klog.InfoLevel, rabbit_tag, "RabbitMQ buffer drained successfully")
+			that.logf(klog.InfoLevel, RabbitLogTag, "RabbitMQ buffer drained successfully")
 		}
 	case <-time.After(20 * time.Second):
 		if that.logf != nil {
-			that.logf(klog.WarnLevel, rabbit_tag, "RabbitMQ drain timeout, forcing shutdown")
+			that.logf(klog.WarnLevel, RabbitLogTag, "RabbitMQ drain timeout, forcing shutdown")
 		}
 	}
 

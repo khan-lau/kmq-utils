@@ -32,7 +32,7 @@ func NewRedisPub(ctx *kcontext.ContextNode, queueSize uint, conf *RedisConfig, l
 
 	if len(conf.Addrs) == 0 {
 		if logf != nil {
-			logf(klog.ErrorLevel, redis_tag, "redis config addrs is empty")
+			logf(klog.ErrorLevel, RedisLogTag, "redis config addrs is empty")
 		}
 		return nil
 	}
@@ -42,7 +42,7 @@ func NewRedisPub(ctx *kcontext.ContextNode, queueSize uint, conf *RedisConfig, l
 	queue, err := ksync.NewLockedRingBuffer[*kredis.RedisMessage](uint64(queueSize))
 	if err != nil {
 		if logf != nil {
-			logf(klog.ErrorLevel, redis_tag, "Create redisPub queue failed: %s", err.Error())
+			logf(klog.ErrorLevel, RedisLogTag, "Create redisPub queue failed: %s", err.Error())
 		}
 		return nil
 	}
@@ -79,32 +79,32 @@ func (that *RedisPub) Close() {
 	that.ctx.Remove()
 
 	if that.logf != nil {
-		that.logf(klog.InfoLevel, redis_tag, "Client stopped")
+		that.logf(klog.InfoLevel, RedisLogTag, "Client stopped")
 	}
 }
 
 func (that *RedisPub) Start() {
 	if !that.started.CompareAndSwap(false, true) {
 		if that.logf != nil {
-			that.logf(klog.WarnLevel, redis_tag, "RedisPub already started")
+			that.logf(klog.WarnLevel, RedisLogTag, "RedisPub already started")
 		}
 		return
 	}
 
 	if that.logf != nil {
-		that.logf(klog.InfoLevel, redis_tag, "RedisPub starting...")
+		that.logf(klog.InfoLevel, RedisLogTag, "RedisPub starting...")
 	}
 
 	that.reconnectLoop(func() {
 		if that.logf != nil {
-			that.logf(klog.InfoLevel, redis_tag, "Producer mode connected, ready to publish")
+			that.logf(klog.InfoLevel, RedisLogTag, "Producer mode connected, ready to publish")
 		}
 		// 准备发送信息
 		that.startPublish()
 	})
 
 	if that.logf != nil {
-		that.logf(klog.InfoLevel, redis_tag, "RedisPub stopped")
+		that.logf(klog.InfoLevel, RedisLogTag, "RedisPub stopped")
 	}
 }
 
@@ -119,7 +119,7 @@ func (that *RedisPub) PublishMessage(topic string, message string) bool {
 func (that *RedisPub) Publish(msg *kredis.RedisMessage) bool {
 	if that.draining.Load() {
 		if that.logf != nil {
-			that.logf(klog.WarnLevel, redis_tag, "in draining mode, publish rejected: %s", msg.Topic)
+			that.logf(klog.WarnLevel, RedisLogTag, "in draining mode, publish rejected: %s", msg.Topic)
 		}
 		return false
 	}
@@ -142,7 +142,7 @@ func (that *RedisPub) reconnectLoop(onConected func()) {
 	for {
 		if that.draining.Load() {
 			if that.logf != nil {
-				that.logf(klog.InfoLevel, redis_tag, "draining → exit reconnect loop")
+				that.logf(klog.InfoLevel, RedisLogTag, "draining → exit reconnect loop")
 			}
 			// 正在关闭中，退出循环
 			// 清理资源
@@ -160,7 +160,7 @@ func (that *RedisPub) reconnectLoop(onConected func()) {
 		// 尝试连接
 		if that.dbConnect() {
 			if that.logf != nil {
-				that.logf(klog.InfoLevel, redis_tag, "connected")
+				that.logf(klog.InfoLevel, RedisLogTag, "connected")
 			}
 			if onConected != nil {
 				onConected()
@@ -170,7 +170,7 @@ func (that *RedisPub) reconnectLoop(onConected func()) {
 
 		err := fmt.Errorf("connect to redis [%s] - %d faulted", strings.Join(that.conf.Addrs, ", "), that.conf.DB)
 		if that.logf != nil {
-			that.logf(klog.ErrorLevel, redis_tag, "%v", err)
+			that.logf(klog.ErrorLevel, RedisLogTag, "%v", err)
 		}
 
 		time.Sleep(reconnectInterval * time.Millisecond)
@@ -218,7 +218,7 @@ func (that *RedisPub) startPublish() {
 			if remainLen := that.queue.Len(); remainLen > 0 {
 				remainMsgs, n := that.queue.DequeueBatchNoWait(int(that.bufferSize))
 				if n > 0 && that.logf != nil {
-					that.logf(klog.WarnLevel, redis_tag, "remainMsgs: %d", n)
+					that.logf(klog.WarnLevel, RedisLogTag, "remainMsgs: %d", n)
 				}
 				for _, msg := range remainMsgs {
 					that.publishData(msg.Topic, msg.Message)
@@ -248,12 +248,12 @@ func (that *RedisPub) publishData(topic string, message string) {
 		// === 排水模式：只发一次 ===
 		handler := that.redisHandler
 		if handler == nil {
-			that.logf(klog.WarnLevel, redis_tag, "redisHandler is nil in draining mode")
+			that.logf(klog.WarnLevel, RedisLogTag, "redisHandler is nil in draining mode")
 			return
 		}
 		if err := handler.Publish(msg.Topic, msg.Message); err != nil {
 			if that.logf != nil {
-				that.logf(klog.WarnLevel, redis_tag, "Publish in draining mode failed (one shot): %v", err)
+				that.logf(klog.WarnLevel, RedisLogTag, "Publish in draining mode failed (one shot): %v", err)
 			}
 		}
 		return
@@ -265,7 +265,7 @@ func (that *RedisPub) publishData(topic string, message string) {
 		// 如果在重试过程中被外部 Stop()，则立即退出
 		if that.draining.Load() {
 			if that.logf != nil {
-				that.logf(klog.InfoLevel, redis_tag, "draining detected during retry, stop publishing")
+				that.logf(klog.InfoLevel, RedisLogTag, "draining detected during retry, stop publishing")
 			}
 			return
 		}
@@ -279,7 +279,7 @@ func (that *RedisPub) publishData(topic string, message string) {
 
 			// // 发送失败，记录日志并等待后重试
 			// if that.logf != nil {
-			// 	that.logf(klog.WarnLevel, redis_tag, "Publish failed, will retry: %v", err)
+			// 	that.logf(klog.WarnLevel, RedisLogTag, "Publish failed, will retry: %v", err)
 			// }
 			that.onError(err) // 通知上层错误（但不停止服务）
 		}
@@ -294,7 +294,7 @@ func (that *RedisPub) onError(err error) {
 		that.conf.OnError(err)
 	}
 	if that.logf != nil {
-		that.logf(klog.WarnLevel, redis_tag, "%v", err)
+		that.logf(klog.WarnLevel, RedisLogTag, "%v", err)
 	}
 	// 重要：只标记连接断开，让 reconnectLoop 自动重连
 	// 不要调用 stop()，否则会永久停止

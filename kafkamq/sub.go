@@ -174,23 +174,34 @@ func (that *ConsumerGroup) SyncSubscribe() {
 		defer workerWg.Done()
 		buffer := make([]*KafkaMessage, that.bufferSize)
 		for {
+
 			// 使用阻塞式 DequeueTo。
 			// 退出逻辑：当 queue.Close() 被调用且数据排干后，n 会返回 0。
-			n := that.queue.DequeueTo(buffer)
-			if n <= 0 {
-				break
+			n := that.queue.DequeueToNoWait(buffer)
+			if n > 0 {
+				for _, msg := range buffer[:n] {
+					consumerHandler(that, msg)
+					// 标记位点。统一由处理协程标记，职责单一，避免 Cleanup 并发竞争。
+					if msg.session != nil && that.conf.Consumer.AutoCommit == AUTO_COMMIT_NONE {
+						msg.session.MarkOffset(msg.Topic, msg.Partition, msg.Offset+1, "")
+					}
+				}
+				continue
 			}
 
-			for _, msg := range buffer[:n] {
-				consumerHandler(that, msg)
-				// 标记位点。统一由处理协程标记，职责单一，避免 Cleanup 并发竞争。
-				if msg.session != nil && that.conf.Consumer.AutoCommit == AUTO_COMMIT_NONE {
-					msg.session.MarkOffset(msg.Topic, msg.Partition, msg.Offset+1, "")
-				}
+			if that.queue.IsClosed() {
+				break
 			}
 
 			if ctx.Context().Err() != nil {
 				break
+			}
+
+			// 队列为空但未关闭：让出 CPU，防止 busy loop
+			select {
+			case <-time.After(2 * time.Millisecond): // 8~15ms 即可，足够灵敏
+			case <-ctx.Context().Done():
+				continue
 			}
 		}
 
@@ -206,6 +217,9 @@ func (that *ConsumerGroup) SyncSubscribe() {
 	<-that.ctx.Context().Done() // 阻塞等待外部取消信号
 	that.group.PauseAll()       // 停止从 Broker 拉取
 	tmpCtx.Cancel()             // 此时 tmpCtx 取消会导致 Consume 返回，随后触发 handler.Cleanup
+
+	// 关键：给 Sarama 一点时间把内部消息吐出来
+	time.Sleep(ShutdownDrainTimeout * time.Millisecond) // 推荐范围：800ms ~ 2500ms
 
 	// that.group.Close() 会同步阻塞，直到 Sarama 倒完最后一滴水、安全触发 Cleanup、
 	// 并且把所有进队的数据位点 100% 正确提交给 Kafka 后，才会返回。
@@ -303,9 +317,9 @@ func (that *privateConsumerGroupHandler) Cleanup(session sarama.ConsumerGroupSes
 	}
 	isClosing := that.isParentCtxDone() // 检查是否是用户主动关闭了 context
 	if isClosing {
-		// 无论是否是主动关闭，Cleanup 的唯一核心职责是“发信号”
-		// 只有在主动关闭时才调用 Close() 破坏阻塞，触发处理协程排干数据并退出
-		that.queue.Close()
+		// // 无论是否是主动关闭，Cleanup 的唯一核心职责是“发信号”
+		// // 只有在主动关闭时才调用 Close() 破坏阻塞，触发处理协程排干数据并退出
+		// that.queue.Close()
 		if that.logf != nil {
 			that.logf(klog.InfoLevel, KafkaGroupHandlerLogTag, "ConsumerGroupHandler cleanup done")
 		}
@@ -347,9 +361,9 @@ func (that *privateConsumerGroupHandler) ConsumeClaim(session sarama.ConsumerGro
 
 		// 只有真正成功入队的数据，才在符合条件时触发手动标记/提交
 		// （注意：如果你用的是 AUTO_COMMIT_NATIVE，下面这段原本就不用写，留空即可）
-		if that.AutoCommit != AUTO_COMMIT_NONE {
+		if that.AutoCommit == AUTO_COMMIT_CUSTOM {
 			session.MarkMessage(msg, "")
-			if that.AutoCommit == AUTO_COMMIT_CUSTOM && msg.Offset%500 == 0 {
+			if msg.Offset%500 == 0 {
 				session.Commit()
 			}
 		}

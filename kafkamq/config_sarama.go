@@ -30,6 +30,8 @@ const (
 const (
 	KafkaLogTag             = "kafka"
 	KafkaGroupHandlerLogTag = "kafka_handler"
+
+	ShutdownDrainTimeout = 2500 // 关闭 Kafka 消费者群组时等待消费已缓冲消息的超时时间, 单位为毫秒
 )
 
 var (

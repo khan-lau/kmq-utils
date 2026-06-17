@@ -103,12 +103,14 @@ func NewAsyncProducer(ctx *kcontext.ContextNode, queueSize uint, conf *Config, l
 }
 
 func (that *AsyncProducer) Start() {
-	that.wg.Add(2) // 两个主要协程：反馈监听 & 排水搬运
+	that.wg.Add(1)
+	defer that.wg.Done()
 
+	var workerWg sync.WaitGroup // 使用局部 WaitGroup 控制子协程（搬运工）
+	workerWg.Add(1)
 	subCtx, subCancel := context.WithCancel(context.Background())
-	go func(ctx context.Context) {
-		defer that.wg.Done()
-
+	go func(ctx context.Context, wg *sync.WaitGroup) {
+		defer wg.Done()
 		successesChan := that.Producer.Successes() // 成功状态通道
 		errorsChan := that.Producer.Errors()       // 失败状态通道
 		for {
@@ -137,10 +139,11 @@ func (that *AsyncProducer) Start() {
 				}
 			}
 		}
-	}(subCtx)
+	}(subCtx, &workerWg)
 
-	go func(cancelFunc context.CancelFunc) {
-		defer that.wg.Done()
+	workerWg.Add(1)
+	go func(cancelFunc context.CancelFunc, wg *sync.WaitGroup) {
+		defer wg.Done()
 
 		buffer := make([]KafkaMessage, that.queueSize)
 		for {
@@ -156,14 +159,14 @@ func (that *AsyncProducer) Start() {
 			}
 		}
 		subCancel()
-	}(subCancel)
+	}(subCancel, &workerWg)
 
 	if that.conf != nil && that.conf.OnReady != nil {
 		that.conf.OnReady(true)
 	}
 
 	<-that.ctx.Context().Done() // 阻塞等待外部取消信号（如调用了 Close 方法）
-	that.queue.Close()          // 开始排水流程, 操作会唤醒阻塞在 DequeueTo 的 daemonCtx 协程，并让它一次性取出余下所有消息。
+	workerWg.Wait()
 
 	if that.conf.OnExit != nil {
 		that.conf.OnExit(nil)
@@ -228,8 +231,9 @@ func (that *AsyncProducer) Close() {
 		return
 	}
 	that.ctx.Cancel()
-	that.wg.Wait() // 等待 Start 内部所有 wg 任务完成
-	// that.Producer.Close()
+	that.queue.Close() // 开始排水流程, 操作会唤醒阻塞在 DequeueTo 的 daemonCtx 协程，并让它一次性取出余下所有消息。
+	that.wg.Wait()     // 等待 Start 内部所有 wg 任务完成
+
 	// that.Producer.AsyncClose()
 
 	// 先关闭 Producer，利用其阻塞特性等待数据 Flush 完毕

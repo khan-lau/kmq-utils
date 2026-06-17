@@ -181,10 +181,10 @@ func (that *ConsumerGroup) SyncSubscribe() {
 			if n > 0 {
 				for _, msg := range buffer[:n] {
 					consumerHandler(that, msg)
-					// 标记位点。统一由处理协程标记，职责单一，避免 Cleanup 并发竞争。
-					if msg.session != nil && that.conf.Consumer.AutoCommit == AUTO_COMMIT_NONE {
-						msg.session.MarkOffset(msg.Topic, msg.Partition, msg.Offset+1, "")
-					}
+					// // 标记位点。统一由处理协程标记，职责单一，避免 Cleanup 并发竞争。
+					// if msg.session != nil && that.conf.Consumer.AutoCommit == AUTO_COMMIT_NONE {
+					// 	msg.session.MarkOffset(msg.Topic, msg.Partition, msg.Offset+1, "")
+					// }
 				}
 				continue
 			}

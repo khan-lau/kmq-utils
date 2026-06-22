@@ -113,10 +113,12 @@ func (that *AsyncProducer) Start() {
 		defer wg.Done()
 		successesChan := that.Producer.Successes() // 成功状态通道
 		errorsChan := that.Producer.Errors()       // 失败状态通道
+
+	END_LOOP:
 		for {
 			select {
 			case <-ctx.Done():
-				return
+				break END_LOOP
 			case success, ok := <-successesChan:
 				if !ok { // Producer 关闭后通道关闭，退出
 					return
@@ -139,6 +141,10 @@ func (that *AsyncProducer) Start() {
 				}
 			}
 		}
+
+		if that.logf != nil {
+			that.logf(klog.InfoLevel, KafkaLogTag, "kafka producer status channel done")
+		}
 	}(subCtx, &workerWg)
 
 	workerWg.Add(1)
@@ -159,6 +165,10 @@ func (that *AsyncProducer) Start() {
 			}
 		}
 		subCancel()
+
+		if that.logf != nil {
+			that.logf(klog.InfoLevel, KafkaLogTag, "kafka producer send goroutine done")
+		}
 	}(subCancel, &workerWg)
 
 	if that.conf != nil && that.conf.OnReady != nil {
@@ -170,6 +180,10 @@ func (that *AsyncProducer) Start() {
 
 	if that.conf.OnExit != nil {
 		that.conf.OnExit(nil)
+	}
+
+	if that.logf != nil {
+		that.logf(klog.InfoLevel, KafkaLogTag, "kafka producer runloop done")
 	}
 }
 

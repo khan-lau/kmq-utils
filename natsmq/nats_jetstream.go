@@ -328,8 +328,10 @@ func (that *NatsJetStreamClient) syncSubscriptions() error {
 	}
 
 	// 预创建或更新 Consumer
-	if _, err := that.upsertConsumer(that.js); err != nil {
-		return err
+	if that.conf.JetStream().Consumer() != nil {
+		if _, err := that.upsertConsumer(that.js); err != nil {
+			return err
+		}
 	}
 
 	// 准备消息处理Handler
@@ -346,7 +348,7 @@ func (that *NatsJetStreamClient) syncSubscriptions() error {
 			handler(that, &NatsMessage{Seq: meta.Timestamp.UnixNano(), Topic: msg.Subject, Reply: msg.Reply, Header: msg.Header, Payload: msg.Data, origin: msg})
 		}
 
-		if that.conf.jetStream.consumer.AutoCommit() == AUTO_COMMIT_NATIVE || that.conf.jetStream.consumer.AutoCommit() == AUTO_COMMIT_CUSTOM {
+		if that.conf.jetStream.consumer != nil && (that.conf.jetStream.consumer.AutoCommit() == AUTO_COMMIT_NATIVE || that.conf.jetStream.consumer.AutoCommit() == AUTO_COMMIT_CUSTOM) {
 			err := msg.Ack()
 			if err != nil && that.logf != nil {
 				that.logf(klog.WarnLevel, NatsLogTag, "Failed to ack topic: %s, message: %v", msg.Subject, err)
@@ -358,7 +360,7 @@ func (that *NatsJetStreamClient) syncSubscriptions() error {
 		var sub *nats.Subscription
 		var err error
 
-		if len(that.conf.JetStream().Consumer().Name()) > 0 {
+		if that.conf.JetStream().Consumer() != nil && len(that.conf.JetStream().Consumer().Name()) > 0 {
 			// 群组订阅
 			sub, err = that.js.QueueSubscribe(topic, that.conf.JetStream().Consumer().Name(), natsHandler, nats.Durable(that.conf.JetStream().Consumer().Name()))
 		} else {
@@ -431,6 +433,10 @@ func (that *NatsJetStreamClient) upsertJetstream(js nats.JetStreamContext) (*nat
 
 // 更新或创建consumer
 func (that *NatsJetStreamClient) upsertConsumer(js nats.JetStreamContext) (*nats.ConsumerInfo, error) {
+	if that.conf.JetStream().Consumer() == nil {
+		return nil, nil
+	}
+
 	filterSubjects := that.conf.JetStream().Topics()
 	consumerCfg := &nats.ConsumerConfig{
 		Durable:        that.conf.JetStream().Consumer().Name(),

@@ -312,9 +312,10 @@ func (that *ConsumerConfig) MainHandler() MessageHandler {
 
 type ProducerConfig struct {
 	Compression      string        // 压缩方式: 默认snappy , 可选[none, gzip, snappy, lz4, zstd]
-	CompressionLevel int           // 压缩级别  默认 -1000
+	CompressionLevel int           // 压缩级别  默认 -1000, `lz4` `snappy` 不支持level参数, gzip zstd 使用 1-9参数代表低到高压缩率
 	MaxMessageBytes  int           // 每条消息最大字节, 默认100M
 	RequiredAcks     string        // 发送确认: 默认 none, 可选[none, local, all]
+	Idempotent       bool          // 是否开启幂等性, 默认为false, 开启后, 消息会在 Net.MaxOpenRequests大于1时, 按顺序发送, 但性能会有小幅下降
 	ReturnAck        bool          // 是否返回消费过程中遇到的错误, 默认为false
 	ReturnError      bool          // 是否返回消费完成, 默认为false
 	FlushMessages    int           // 刷新消息数量: 每100条刷新
@@ -330,6 +331,7 @@ func NewKafkaProducerConfig() *ProducerConfig {
 		CompressionLevel: -1000,
 		MaxMessageBytes:  100 * 1024 * 1024,
 		RequiredAcks:     "none",
+		Idempotent:       false,
 		ReturnAck:        false,
 		ReturnError:      false,
 		FlushMessages:    100,
@@ -383,6 +385,15 @@ func (that *ProducerConfig) SetRequiredAcks(acks string) *ProducerConfig {
 		that.RequiredAcks = "none"
 	}
 	return that
+}
+
+func (that *ProducerConfig) SetIdempotent(idempotent bool) *ProducerConfig {
+	that.Idempotent = idempotent
+	return that
+}
+
+func (that *ProducerConfig) GetIdempotent() bool {
+	return that.Idempotent
 }
 
 func (that *ProducerConfig) GetRequiredAcks() sarama.RequiredAcks {

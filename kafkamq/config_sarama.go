@@ -316,8 +316,8 @@ type ProducerConfig struct {
 	MaxMessageBytes  int           // 每条消息最大字节, 默认100M
 	RequiredAcks     string        // 发送确认: 默认 none, 可选[none, local, all]
 	Idempotent       bool          // 是否开启幂等性, 默认为false, 开启后, 消息会在 Net.MaxOpenRequests大于1时, 按顺序发送, 但性能会有小幅下降
-	ReturnAck        bool          // 是否返回消费过程中遇到的错误, 默认为false
-	ReturnError      bool          // 是否返回消费完成, 默认为false
+	ReturnAck        bool          // 是否返回消费完成, 默认为false
+	ReturnError      bool          // 是否返回消费过程中遇到的错误, 默认为false
 	FlushMessages    int           // 刷新消息数量: 每100条刷新
 	FlushFrequency   time.Duration // 缓存时间, 超过时长自动flush
 	FlushMaxMessages int           // 最大刷新消息数量: 10000条
@@ -345,10 +345,10 @@ func NewKafkaProducerConfig() *ProducerConfig {
 func (that *ProducerConfig) SetCompression(compression string, level int) *ProducerConfig {
 	switch compression {
 	case "none", "gzip", "snappy", "lz4", "zstd":
-		that.RequiredAcks = compression
+		that.Compression = compression
 		that.CompressionLevel = level
 	default:
-		that.RequiredAcks = "none"
+		that.Compression = "none"
 		that.CompressionLevel = -1000
 	}
 

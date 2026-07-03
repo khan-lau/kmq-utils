@@ -29,12 +29,12 @@ type RedisSub struct {
 	logf       klog.AppLogFuncWithTag
 }
 
-func NewRedisSub(ctx *kcontext.ContextNode, bufferSize uint, conf *RedisConfig, logf klog.AppLogFuncWithTag) *RedisSub {
+func NewRedisSub(ctx *kcontext.ContextNode, bufferSize uint, conf *RedisConfig, logf klog.AppLogFuncWithTag) (*RedisSub, error) {
 	if len(conf.Addrs) == 0 {
 		if logf != nil {
 			logf(klog.ErrorLevel, RedisLogTag, "redis config addrs is empty")
 		}
-		return nil
+		return nil, ErrEmptyAddrs
 	}
 
 	subCtx := ctx.NewChild("redismq_pubsub")
@@ -51,7 +51,7 @@ func NewRedisSub(ctx *kcontext.ContextNode, bufferSize uint, conf *RedisConfig, 
 		logf:         logf,
 	}
 
-	return redisPs
+	return redisPs, nil
 }
 
 func (that *RedisSub) Subscribe() {

@@ -163,22 +163,15 @@ type Message struct {
 ////////////////////////////////////////////////////
 
 type ProducerConfig struct {
-	Exchange string // 交换机名称
-	Router   string // 路由键
-	WorkType string // 工作模式
+	Exchange  string // 交换机名称
+	Router    string // 路由键
+	WorkType  string // 工作模式
+	ReturnAck bool   // 是否返回确认消息
 }
 
 func NewProducerConfig() *ProducerConfig {
-	return &ProducerConfig{}
+	return &ProducerConfig{ReturnAck: false}
 }
-
-// func NewProducerConfig(exchange, router, workType string) *ProducerConfig {
-// 	return &ProducerConfig{
-// 		Exchange: exchange,
-// 		Router:   router,
-// 		WorkType: workType,
-// 	}
-// }
 
 func (that *ProducerConfig) SetExchange(exchange string) *ProducerConfig {
 	that.Exchange = exchange
@@ -192,6 +185,11 @@ func (that *ProducerConfig) SetRouter(router string) *ProducerConfig {
 
 func (that *ProducerConfig) SetWorkType(workType string) *ProducerConfig {
 	that.WorkType = workType
+	return that
+}
+
+func (that *ProducerConfig) SetReturnAck(returnAck bool) *ProducerConfig {
+	that.ReturnAck = returnAck
 	return that
 }
 

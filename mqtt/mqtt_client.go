@@ -85,7 +85,7 @@ func (that *MqttClient) Start() error {
 	// opts.SetDefaultPublishHandler(func(c paho.Client, msg paho.Message) {})
 
 	// 遗嘱设置
-	if len(that.conf.Topics()) > 0 {
+	if len(that.conf.Topics()) > 0 && that.conf.WillTopic() != "" {
 		opts.SetWill(that.conf.WillTopic(), string(that.conf.WillPayload()), that.conf.Qos(), that.conf.WillRetain())
 	}
 

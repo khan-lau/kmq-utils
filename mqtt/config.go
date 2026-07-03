@@ -108,7 +108,7 @@ func NewMqttConfig(broker string, clientId string, username string, password str
 	}
 }
 
-func (that *Config) AddBorker(broker string) *Config {
+func (that *Config) AddBroker(broker string) *Config {
 	that.broker = broker
 	return that
 }

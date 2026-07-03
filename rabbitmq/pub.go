@@ -55,15 +55,17 @@ func NewProducer(ctx *kcontext.ContextNode, queueSize uint, conf *RabbitConfig, 
 		return nil, err
 	}
 
-	publisher, err := rabbitmq.NewPublisher(
-		conn,
-		rabbitmq.WithPublisherOptionsLogger(rlog),
-		rabbitmq.WithPublisherOptionsExchangeName(conf.Producer.Exchange),
-		rabbitmq.WithPublisherOptionsExchangeKind(conf.Producer.WorkType),
-		rabbitmq.WithPublisherOptionsExchangeDurable,
-		rabbitmq.WithPublisherOptionsExchangeDeclare,
-		// rabbitmq.WithPublisherOptionsConfirm, // 开启发布确认
-	)
+	optionFuncs := make([]func(*rabbitmq.PublisherOptions), 0, 8)
+	optionFuncs = append(optionFuncs, rabbitmq.WithPublisherOptionsLogger(rlog))
+	optionFuncs = append(optionFuncs, rabbitmq.WithPublisherOptionsExchangeName(conf.Producer.Exchange))
+	optionFuncs = append(optionFuncs, rabbitmq.WithPublisherOptionsExchangeKind(conf.Producer.WorkType))
+	optionFuncs = append(optionFuncs, rabbitmq.WithPublisherOptionsExchangeDurable)
+	optionFuncs = append(optionFuncs, rabbitmq.WithPublisherOptionsExchangeDeclare)
+	if conf.Producer.ReturnAck {
+		optionFuncs = append(optionFuncs, rabbitmq.WithPublisherOptionsConfirm)
+	}
+
+	publisher, err := rabbitmq.NewPublisher(conn, optionFuncs...)
 	if err != nil {
 		return nil, err
 	}
@@ -83,11 +85,13 @@ func (that *Producer) Start() {
 		}
 	})
 
-	that.publisher.NotifyPublish(func(c rabbitmq.Confirmation) {
-		if that.logf != nil {
-			that.logf(klog.DebugLevel, RabbitLogTag, "message confirmed from server. tag: %d, ack: %d", c.DeliveryTag, c.Ack)
-		}
-	})
+	if that.conf.Producer.ReturnAck {
+		that.publisher.NotifyPublish(func(c rabbitmq.Confirmation) {
+			if that.logf != nil {
+				that.logf(klog.DebugLevel, RabbitLogTag, "message confirmed from server. tag: %d, ack: %d", c.DeliveryTag, c.Ack)
+			}
+		})
+	}
 
 	that.wg.Add(1)
 	//  后台搬运 (Sender Thread) ---

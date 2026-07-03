@@ -42,7 +42,7 @@ func NewAsyncProducer(ctx *kcontext.ContextNode, queueSize uint, conf *Config, l
 	config.ChannelBufferSize = conf.ChannelBufferSize // 设置通道缓冲区大小
 
 	// 网络配置
-	config.Net.MaxOpenRequests = conf.Net.MaxOpenRequests // 最大请求数, 默认为5，这里设置为1，避免并发请求过多导致Kafka端出现问题
+	config.Net.MaxOpenRequests = conf.Net.MaxOpenRequests // 最大请求数, 默认为5，应避免并发请求过多导致Kafka端出现问题
 	config.Net.DialTimeout = conf.Net.DialTimeout         // 连接超时时间，默认为30秒
 	config.Net.ReadTimeout = conf.Net.ReadTimeout         // 从连接读取消息的超时时间，默认为120秒
 	config.Net.WriteTimeout = conf.Net.WriteTimeout       // 向连接写入消息的超时时间，默认为10秒
@@ -57,8 +57,8 @@ func NewAsyncProducer(ctx *kcontext.ContextNode, queueSize uint, conf *Config, l
 	config.Producer.MaxMessageBytes = conf.Producer.MaxMessageBytes    // 发送限制
 	config.Producer.RequiredAcks = conf.Producer.GetRequiredAcks()     // 设置确认模式: 本地文件写入成功，并不代表已经通知服务器
 	config.Producer.Idempotent = conf.Producer.Idempotent              // 是否开启幂等性, 默认为false
-	config.Producer.Return.Errors = conf.Producer.ReturnAck            // 是否返回消费过程中遇到的错误, 默认为false
-	config.Producer.Return.Successes = conf.Producer.ReturnError       // 是否返回消费完成, 默认为false
+	config.Producer.Return.Errors = conf.Producer.ReturnError          // 是否返回消费过程中遇到的错误, 默认为false
+	config.Producer.Return.Successes = conf.Producer.ReturnAck         // 是否返回消费完成, 默认为false
 	config.Producer.Flush.Messages = conf.Producer.FlushMessages       // 设置刷新消息数量: 每100条刷新
 	config.Producer.Flush.Frequency = conf.Producer.FlushFrequency     // 缓存时间
 	config.Producer.Flush.MaxMessages = conf.Producer.FlushMaxMessages // 设置刷新最大消息数量: 10000条
@@ -214,7 +214,7 @@ func (that *AsyncProducer) PublisMessage(topic, key, message string) bool {
 	return that.Publish(msg)
 }
 
-func (that *AsyncProducer) PublisData(partition int32, topic, key string, value []byte) bool {
+func (that *AsyncProducer) PublishData(partition int32, topic, key string, value []byte) bool {
 	msg := KafkaMessage{
 		Topic:     topic,
 		Partition: partition,
@@ -225,7 +225,7 @@ func (that *AsyncProducer) PublisData(partition int32, topic, key string, value 
 	return that.Publish(msg)
 }
 
-func (that *AsyncProducer) PublisDataWithProperties(partition int32, topic, key string, value []byte, properties map[string]string) bool {
+func (that *AsyncProducer) PublishDataWithProperties(partition int32, topic, key string, value []byte, properties map[string]string) bool {
 	headers := make([]sarama.RecordHeader, 0, len(properties))
 	for k, v := range properties {
 		headers = append(headers, sarama.RecordHeader{Key: []byte(k), Value: []byte(v)})

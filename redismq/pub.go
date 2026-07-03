@@ -27,14 +27,14 @@ type RedisPub struct {
 	logf       klog.AppLogFuncWithTag
 }
 
-func NewRedisPub(ctx *kcontext.ContextNode, queueSize uint, conf *RedisConfig, logf klog.AppLogFuncWithTag) *RedisPub {
+func NewRedisPub(ctx *kcontext.ContextNode, queueSize uint, conf *RedisConfig, logf klog.AppLogFuncWithTag) (*RedisPub, error) {
 	subCtx := ctx.NewChild("redismq_pubsub")
 
 	if len(conf.Addrs) == 0 {
 		if logf != nil {
 			logf(klog.ErrorLevel, RedisLogTag, "redis config addrs is empty")
 		}
-		return nil
+		return nil, ErrEmptyAddrs
 	}
 
 	redisHD := kredis.NewKRedis(subCtx, conf.Addrs[0], "", conf.Password, conf.DB)
@@ -44,7 +44,7 @@ func NewRedisPub(ctx *kcontext.ContextNode, queueSize uint, conf *RedisConfig, l
 		if logf != nil {
 			logf(klog.ErrorLevel, RedisLogTag, "Create redisPub queue failed: %s", err.Error())
 		}
-		return nil
+		return nil, err
 	}
 
 	redisPs := &RedisPub{
@@ -60,7 +60,7 @@ func NewRedisPub(ctx *kcontext.ContextNode, queueSize uint, conf *RedisConfig, l
 		logf:         logf,
 	}
 
-	return redisPs
+	return redisPs, nil
 }
 
 func (that *RedisPub) Close() {

@@ -177,7 +177,7 @@ func (that *ConsumerGroup) SyncSubscribe() {
 
 			// 使用阻塞式 DequeueTo。
 			// 退出逻辑：当 queue.Close() 被调用且数据排干后，n 会返回 0。
-			n := that.queue.TryDequeueTo(buffer)
+			n, isValidQueue := that.queue.TryDequeueTo(buffer)
 			if n > 0 {
 				for _, msg := range buffer[:n] {
 					consumerHandler(that, msg)
@@ -189,7 +189,8 @@ func (that *ConsumerGroup) SyncSubscribe() {
 				continue
 			}
 
-			if that.queue.IsClosed() {
+			// 队列已关闭或缓冲区为nil, 则直接返回
+			if !isValidQueue {
 				break
 			}
 
@@ -344,7 +345,7 @@ func (that *privateConsumerGroupHandler) ConsumeClaim(session sarama.ConsumerGro
 			}
 
 			// 2. 尝试非阻塞入队。如果成功，标记并跳出当前消息的自旋
-			if ok := that.queue.TryEnqueue(kafkMsg); ok {
+			if ok, isValid := that.queue.TryEnqueue(kafkMsg); ok && isValid {
 				enqueued = true
 				break
 			}

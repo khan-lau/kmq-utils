@@ -13,6 +13,10 @@ import (
 	"github.com/khan-lau/kutils/ksync"
 )
 
+const (
+	DefaultBatchSize = 32 // 默认批量大小
+)
+
 type RedisPub struct {
 	ctx          *kcontext.ContextNode
 	redisHandler *kredis.KRedis
@@ -63,26 +67,6 @@ func NewRedisPub(ctx *kcontext.ContextNode, queueSize uint, conf *RedisConfig, l
 	return redisPs, nil
 }
 
-func (that *RedisPub) Close() {
-	that.draining.Store(true)
-	that.connected.Store(false)
-
-	that.wg.Wait()
-
-	that.queue.Close() // 关闭队列
-
-	if that.redisHandler != nil {
-		that.redisHandler.Stop()
-	}
-
-	that.ctx.Cancel()
-	that.ctx.Remove()
-
-	if that.logf != nil {
-		that.logf(klog.InfoLevel, RedisLogTag, "Client stopped")
-	}
-}
-
 func (that *RedisPub) Start() {
 	if !that.started.CompareAndSwap(false, true) {
 		if that.logf != nil {
@@ -114,6 +98,26 @@ func (that *RedisPub) PublishMessage(topic string, message string) bool {
 		Message: message,
 	}
 	return that.Publish(msg)
+}
+
+func (that *RedisPub) Close() {
+	that.draining.Store(true)
+	that.connected.Store(false)
+
+	that.wg.Wait()
+
+	that.queue.Close() // 关闭队列
+
+	if that.redisHandler != nil {
+		that.redisHandler.Stop()
+	}
+
+	that.ctx.Cancel()
+	that.ctx.Remove()
+
+	if that.logf != nil {
+		that.logf(klog.InfoLevel, RedisLogTag, "Client stopped")
+	}
 }
 
 func (that *RedisPub) Publish(msg *kredis.RedisMessage) bool {
@@ -212,6 +216,8 @@ func (that *RedisPub) startPublish() {
 	that.wg.Add(1)       // 注册到 WaitGroup
 	defer that.wg.Done() // 退出时通知完成
 
+	batchSize := max(int(that.bufferSize/4), DefaultBatchSize)
+	batchArray := make([]*kredis.RedisMessage, batchSize)
 	for {
 		if that.draining.Load() { // 正在关闭中，退出循环
 			// 处理完剩余队列后，再退出循环
@@ -220,9 +226,11 @@ func (that *RedisPub) startPublish() {
 				if n > 0 && that.logf != nil {
 					that.logf(klog.WarnLevel, RedisLogTag, "remainMsgs: %d", n)
 				}
-				for _, msg := range remainMsgs {
-					that.publishData(msg.Topic, msg.Message)
-				}
+				that.PublishArray(remainMsgs)
+
+				// for _, msg := range remainMsgs {
+				// 	that.publishData(msg.Topic, msg.Message)
+				// }
 			}
 
 			return
@@ -233,36 +241,43 @@ func (that *RedisPub) startPublish() {
 			return // 连接断开，退出等待重连后的新 goroutine
 		}
 
-		if msg, ok := that.queue.TryDequeue(); ok {
-			that.publishData(msg.Topic, msg.Message)
+		n, isValidQueue := that.queue.TryDequeueTo(batchArray)
+		if n > 0 {
+			that.PublishArray(batchArray[:n])
+		} else if isValidQueue {
+			time.Sleep(10 * time.Millisecond) // 避免 busy loop
+			continue
+		}
+
+		// 队列已关闭或缓冲区为nil, 则直接返回
+		if !isValidQueue {
+			return
 		}
 	}
 }
 
-func (that *RedisPub) publishData(topic string, message string) {
-	msg := &kredis.RedisMessage{
-		Topic:   topic,
-		Message: message,
+func (that *RedisPub) PublishArray(messages []*kredis.RedisMessage) {
+	if len(messages) == 0 {
+		return
 	}
+
 	if that.draining.Load() {
-		// === 排水模式：只发一次 ===
-		handler := that.redisHandler
-		if handler == nil {
-			that.logf(klog.WarnLevel, RedisLogTag, "redisHandler is nil in draining mode")
-			return
-		}
-		if err := handler.Publish(msg.Topic, msg.Message); err != nil {
-			if that.logf != nil {
-				that.logf(klog.WarnLevel, RedisLogTag, "Publish in draining mode failed (one shot): %v", err)
+		if that.redisHandler != nil {
+			if errs := that.redisHandler.PublishArray(messages); errs != nil {
+				for _, err := range errs {
+					if nil != err {
+						if that.logf != nil {
+							that.logf(klog.WarnLevel, RedisLogTag, "Publish in draining mode failed (one shot): %v", err)
+						}
+					}
+				}
 			}
 		}
 		return
 	}
-	// === 正常模式：失败后死循环重试，直到成功 ===
-	const maxRetryInterval = 1000
 
+	const maxRetryInterval = 1000
 	for {
-		// 如果在重试过程中被外部 Stop()，则立即退出
 		if that.draining.Load() {
 			if that.logf != nil {
 				that.logf(klog.InfoLevel, RedisLogTag, "draining detected during retry, stop publishing")
@@ -271,23 +286,66 @@ func (that *RedisPub) publishData(topic string, message string) {
 		}
 
 		if that.redisHandler != nil {
-			err := that.redisHandler.Publish(msg.Topic, msg.Message)
-			if err == nil {
-				// 发送成功，退出重试循环
+			errs := that.redisHandler.PublishArray(messages)
+			if len(errs) == 0 {
 				return
 			}
-
-			// // 发送失败，记录日志并等待后重试
-			// if that.logf != nil {
-			// 	that.logf(klog.WarnLevel, RedisLogTag, "Publish failed, will retry: %v", err)
-			// }
-			that.onError(err) // 通知上层错误（但不停止服务）
+			that.onError(errs[0])
 		}
 
-		// 避免 CPU 空转，失败后等待一段时间再重试
 		time.Sleep(time.Duration(maxRetryInterval) * time.Millisecond)
 	}
 }
+
+// func (that *RedisPub) publishData(topic string, message string) {
+// 	msg := &kredis.RedisMessage{
+// 		Topic:   topic,
+// 		Message: message,
+// 	}
+// 	if that.draining.Load() {
+// 		// === 排水模式：只发一次 ===
+// 		handler := that.redisHandler
+// 		if handler == nil {
+// 			that.logf(klog.WarnLevel, RedisLogTag, "redisHandler is nil in draining mode")
+// 			return
+// 		}
+// 		if err := handler.Publish(msg.Topic, msg.Message); err != nil {
+// 			if that.logf != nil {
+// 				that.logf(klog.WarnLevel, RedisLogTag, "Publish in draining mode failed (one shot): %v", err)
+// 			}
+// 		}
+// 		return
+// 	}
+// 	// === 正常模式：失败后死循环重试，直到成功 ===
+// 	const maxRetryInterval = 1000
+//
+// 	for {
+// 		// 如果在重试过程中被外部 Stop()，则立即退出
+// 		if that.draining.Load() {
+// 			if that.logf != nil {
+// 				that.logf(klog.InfoLevel, RedisLogTag, "draining detected during retry, stop publishing")
+// 			}
+// 			return
+// 		}
+//
+// 		if that.redisHandler != nil {
+// 			err := that.redisHandler.Publish(msg.Topic, msg.Message)
+// 			if err == nil {
+// 				// 发送成功，退出重试循环
+// 				return
+// 			}
+//
+// 			// // 发送失败，记录日志并等待后重试
+// 			// if that.logf != nil {
+// 			// 	that.logf(klog.WarnLevel, RedisLogTag, "Publish failed, will retry: %v", err)
+// 			// }
+// 			that.onError(err) // 通知上层错误（但不停止服务）
+// 		}
+//
+// 		// 避免 CPU 空转，失败后等待一段时间再重试
+// 		time.Sleep(time.Duration(maxRetryInterval) * time.Millisecond)
+// 	}
+// }
 
 func (that *RedisPub) onError(err error) {
 	if that.conf.OnError != nil {

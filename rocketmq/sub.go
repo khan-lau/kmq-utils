@@ -180,7 +180,7 @@ END_LOOP:
 			}
 			break END_LOOP
 		default:
-			if msg, ok := that.queue.TryDequeue(); ok {
+			if msg, ok, isValid := that.queue.TryDequeue(); ok && isValid {
 				msgHandler(that, msg)
 			} else {
 				time.Sleep(10 * time.Millisecond)
@@ -465,7 +465,7 @@ END_LOOP:
 			}
 			break END_LOOP
 		default:
-			if msg, ok := that.queue.TryDequeue(); ok {
+			if msg, ok, isValid := that.queue.TryDequeue(); ok && isValid {
 				that.handleMsg(msg, msgHandler)
 			} else {
 				time.Sleep(10 * time.Millisecond)

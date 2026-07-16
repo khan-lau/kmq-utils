@@ -121,8 +121,8 @@ func (that *Consumer) SyncSubscribe() {
 	subWg.Wait()
 
 	if err != nil {
-		if that.logf != nil && !that.isClosed.Load() { // 仅在非主动关闭时记录错误
-			that.logf(klog.ErrorLevel, RabbitLogTag, "consumer error: %v", err)
+		if !that.isClosed.Load() { // 仅在非主动关闭时记录错误
+			that.log(klog.ErrorLevel, "consumer error: %v", err)
 		}
 	}
 	if that.conf.OnExit != nil {
@@ -148,5 +148,14 @@ func (that *Consumer) Close() {
 	// 3. 彻底物理停机
 	if that.conn != nil {
 		that.conn.Close()
+	}
+}
+
+// log 日志记录, 会自动添加 RabbitLogTag
+//
+//go:inline
+func (that *Consumer) log(level klog.Level, format string, args ...any) {
+	if that.logf != nil {
+		that.logf(level, RabbitLogTag, format, args...)
 	}
 }

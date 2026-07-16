@@ -152,9 +152,7 @@ func (that *ConsumerGroup) SyncSubscribe() {
 	go func(ctx *kcontext.ContextNode, topics []string, handler *privateConsumerGroupHandler) {
 		for {
 			if err := that.group.Consume(ctx.Context(), topics, handler); err != nil {
-				if that.logf != nil {
-					that.logf(klog.ErrorLevel, KafkaLogTag, "kafka.ConsumerGroup error: %s", err.Error())
-				}
+				that.log(klog.ErrorLevel, "kafka.ConsumerGroup error: %s", err.Error())
 			}
 
 			// 检查上下文是否被取消，如果是，函数传入的上下文被取消
@@ -162,9 +160,7 @@ func (that *ConsumerGroup) SyncSubscribe() {
 				break
 			}
 		}
-		if that.logf != nil {
-			that.logf(klog.InfoLevel, KafkaLogTag, "kafka.ConsumerGroup done")
-		}
+		that.log(klog.InfoLevel, "kafka.ConsumerGroup done")
 	}(tmpCtx, topicNameList, handler)
 
 	var workerWg sync.WaitGroup
@@ -206,9 +202,7 @@ func (that *ConsumerGroup) SyncSubscribe() {
 			}
 		}
 
-		if that.logf != nil {
-			that.logf(klog.InfoLevel, KafkaLogTag, "group_consumer_child done")
-		}
+		that.log(klog.InfoLevel, "group_consumer_child done")
 	}(subCtx)
 
 	if that.conf != nil && that.conf.OnReady != nil {
@@ -225,9 +219,7 @@ func (that *ConsumerGroup) SyncSubscribe() {
 	// that.group.Close() 会同步阻塞，直到 Sarama 倒完最后一滴水、安全触发 Cleanup、
 	// 并且把所有进队的数据位点 100% 正确提交给 Kafka 后，才会返回。
 	if err := that.group.Close(); err != nil {
-		if that.logf != nil {
-			that.logf(klog.ErrorLevel, KafkaLogTag, "Error closing client: %s", err.Error())
-		}
+		that.log(klog.ErrorLevel, "Error closing client: %s", err.Error())
 	}
 
 	that.queue.Close()
@@ -241,9 +233,7 @@ func (that *ConsumerGroup) SyncSubscribe() {
 		that.conf.OnExit(nil)
 	}
 
-	if that.logf != nil {
-		that.logf(klog.InfoLevel, KafkaLogTag, "SyncSubscribe done")
-	}
+	that.log(klog.InfoLevel, "SyncSubscribe done")
 }
 
 func (that *ConsumerGroup) Close() {
@@ -254,12 +244,19 @@ func (that *ConsumerGroup) Close() {
 	that.ctx.Cancel() // 发出停止信号
 	that.wg.Wait()    // 等待 SyncSubscribe 跑完所有清理逻辑退出
 
-	if that.logf != nil {
-		that.logf(klog.InfoLevel, KafkaLogTag, "ConsumerGroup Close")
-	}
+	that.log(klog.InfoLevel, "ConsumerGroup Close")
 
 	// that.group.Close()
 	that.ctx.Remove()
+}
+
+// log 日志记录, 会自动添加 KafkaLogTag
+//
+//go:inline
+func (that *ConsumerGroup) log(level klog.Level, format string, args ...any) {
+	if that.logf != nil {
+		that.logf(level, KafkaLogTag, format, args...)
+	}
 }
 
 /////////////////////////////////////////////////////////////
@@ -313,17 +310,13 @@ func (that *privateConsumerGroupHandler) Setup(session sarama.ConsumerGroupSessi
 // Cleanup 是在会话结束之前运行的，在所有 ConsumeClaim 协程退出之后，
 // 但在最后一次提交偏移量之前。
 func (that *privateConsumerGroupHandler) Cleanup(session sarama.ConsumerGroupSession) error {
-	if that.logf != nil {
-		that.logf(klog.InfoLevel, KafkaGroupHandlerLogTag, "ConsumerGroupHandler cleanup end")
-	}
+	that.log(klog.InfoLevel, "ConsumerGroupHandler cleanup end")
 	isClosing := that.isParentCtxDone() // 检查是否是用户主动关闭了 context
 	if isClosing {
 		// // 无论是否是主动关闭，Cleanup 的唯一核心职责是“发信号”
 		// // 只有在主动关闭时才调用 Close() 破坏阻塞，触发处理协程排干数据并退出
 		// that.queue.Close()
-		if that.logf != nil {
-			that.logf(klog.InfoLevel, KafkaGroupHandlerLogTag, "ConsumerGroupHandler cleanup done")
-		}
+		that.log(klog.InfoLevel, "ConsumerGroupHandler cleanup done")
 	}
 
 	return nil
@@ -379,5 +372,14 @@ func (that *privateConsumerGroupHandler) isParentCtxDone() bool {
 		return true
 	default:
 		return false
+	}
+}
+
+// log 日志记录, 会自动添加 KafkaGroupHandlerLogTag
+//
+//go:inline
+func (that *privateConsumerGroupHandler) log(level klog.Level, format string, args ...any) {
+	if that.logf != nil {
+		that.logf(level, KafkaGroupHandlerLogTag, format, args...)
 	}
 }

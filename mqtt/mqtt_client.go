@@ -100,17 +100,17 @@ func (that *MqttClient) Start() error {
 		if that.conf.caCertPath != "" {
 			caCert, err := os.ReadFile(that.conf.caCertPath)
 			if err != nil {
-				that.logf(klog.ErrorLevel, MqttLogTag, "Failed to read CA cert: %v", err)
+				that.log(klog.ErrorLevel, "Failed to read CA cert: %v", err)
 				return err
 			}
 			certPool := x509.NewCertPool()
 			if !certPool.AppendCertsFromPEM(caCert) {
-				that.logf(klog.ErrorLevel, MqttLogTag, "%v", ErrParseCA)
+				that.log(klog.ErrorLevel, "%v", ErrParseCA)
 				return ErrParseCA
 			}
 			tlsConfig.RootCAs = certPool
 		} else {
-			that.logf(klog.ErrorLevel, MqttLogTag, "%v", ErrNoCAProvided)
+			that.log(klog.ErrorLevel, "%v", ErrNoCAProvided)
 			return ErrNoCAProvided
 		}
 		opts.SetTLSConfig(tlsConfig)
@@ -118,9 +118,7 @@ func (that *MqttClient) Start() error {
 
 	// 连接成功事件, 连接鉴权成功后才可以开始进行后续的指令操作
 	opts.SetOnConnectHandler(func(c paho.Client) {
-		if that.logf != nil {
-			that.logf(klog.InfoLevel, MqttLogTag, "mqtt %s %s connect success", that.conf.ClientId(), that.conf.Broker())
-		}
+		that.log(klog.InfoLevel, "mqtt %s %s connect success", that.conf.ClientId(), that.conf.Broker())
 
 		that.connected.Store(true)
 		that.syncSubscriptions() // 同步订阅视图
@@ -135,31 +133,23 @@ func (that *MqttClient) Start() error {
 
 	opts.OnConnectionLost = func(c paho.Client, err error) {
 		that.connected.Store(false)
-		if that.logf != nil {
-			that.logf(klog.WarnLevel, MqttLogTag, "MQTT connection lost: %s", err.Error())
-		}
+		that.log(klog.WarnLevel, "MQTT connection lost: %s", err.Error())
 	}
 
 	// 重连事件
 	opts.SetReconnectingHandler(func(c paho.Client, option *paho.ClientOptions) {
-		if that.logf != nil {
-			that.logf(klog.DebugLevel, MqttLogTag, "mqtt %s %s reconnecting", that.conf.ClientId(), that.conf.Broker())
-		}
+		that.log(klog.DebugLevel, "mqtt %s %s reconnecting", that.conf.ClientId(), that.conf.Broker())
 	})
 
 	// 全局 MQTT pub 消息处理, subscribe 操作时没有指定明确回调函数的, 都会走这里处理
 	opts.SetDefaultPublishHandler(func(client paho.Client, msg paho.Message) {
-		if that.logf != nil {
-			that.logf(klog.DebugLevel, MqttLogTag, "mqtt %s %s receive message: %s", that.conf.ClientId(), that.conf.Broker(), string(msg.Payload()))
-		}
+		that.log(klog.DebugLevel, "mqtt %s %s receive message: %s", that.conf.ClientId(), that.conf.Broker(), string(msg.Payload()))
 	})
 
 	client := paho.NewClient(opts)
 	that.client = client
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		if that.logf != nil {
-			that.logf(klog.ErrorLevel, MqttLogTag, "mqtt %s %s connect error: %s", that.conf.ClientId(), that.conf.Broker(), token.Error())
-		}
+		that.log(klog.ErrorLevel, "mqtt %s %s connect error: %s", that.conf.ClientId(), that.conf.Broker(), token.Error())
 	}
 
 	that.startDrainPipe() // 开始异步发送协程
@@ -187,7 +177,9 @@ func (that *MqttClient) Close() {
 	go func() { that.wg.Wait(); close(done) }()
 	select {
 	case <-done:
+		that.log(klog.InfoLevel, "MqttClient buffer drained successfully")
 	case <-time.After(20 * time.Second):
+		that.log(klog.WarnLevel, "MqttClient drain timeout, forcing shutdown")
 	}
 
 	if that.client != nil {
@@ -247,13 +239,9 @@ func (that *MqttClient) syncSubscriptions() {
 	token := that.client.SubscribeMultiple(topicFilters, pahoHandler)
 	// 阻塞等待订阅完成
 	if token.Wait() && token.Error() != nil {
-		if that.logf != nil {
-			that.logf(klog.ErrorLevel, MqttLogTag, "mqtt %s subscribe fault: %s", that.conf.ClientId(), token.Error())
-		}
+		that.log(klog.ErrorLevel, "mqtt %s subscribe fault: %s", that.conf.ClientId(), token.Error())
 	} else {
-		if that.logf != nil {
-			that.logf(klog.InfoLevel, MqttLogTag, "mqtt %s subscribe topics: [%s] finished", that.conf.ClientId(), strings.Join(topics, ", "))
-		}
+		that.log(klog.InfoLevel, "mqtt %s subscribe topics: [%s] finished", that.conf.ClientId(), strings.Join(topics, ", "))
 	}
 }
 
@@ -290,3 +278,12 @@ func (that *MqttClient) startDrainPipe() {
 ///////////////////////////////////////////////////////////////
 
 ///////////////////////////////////////////////////////////////
+
+// log 日志记录, 会自动添加 MqttLogTag
+//
+//go:inline
+func (that *MqttClient) log(level klog.Level, format string, args ...any) {
+	if that.logf != nil {
+		that.logf(level, MqttLogTag, format, args...)
+	}
+}

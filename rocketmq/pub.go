@@ -107,10 +107,10 @@ func (that *Producer) Start() {
 	}
 	go func(mqProducer rocket.Producer) {
 		err := mqProducer.Start()
-		if err != nil && that.logf != nil {
-			that.logf(klog.ErrorLevel, RocketLogTag, "Start producer error: %s", err.Error())
-		} else if that.logf != nil {
-			that.logf(klog.InfoLevel, RocketLogTag, "Start producer successfully")
+		if err != nil {
+			that.log(klog.ErrorLevel, "Start producer error: %s", err.Error())
+		} else {
+			that.log(klog.InfoLevel, "Start producer successfully")
 		}
 	}(that.mqProducer)
 
@@ -187,14 +187,9 @@ func (that *Producer) Close() {
 
 	select {
 	case <-done:
-		if that.logf != nil {
-			that.logf(klog.InfoLevel, RocketLogTag, "RocketMQ buffer drained successfully")
-		}
+		that.log(klog.InfoLevel, "RocketMQ buffer drained successfully")
 	case <-time.After(20 * time.Second):
-		if that.logf != nil {
-			that.logf(klog.WarnLevel, RocketLogTag, "RocketMQ drain timeout, forcing shutdown")
-		}
-
+		that.log(klog.WarnLevel, "RocketMQ drain timeout, forcing shutdown")
 	}
 
 	// 3. 关闭底层物理资源
@@ -239,9 +234,7 @@ func (that *Producer) drainPublish(msg *RocketMessage) error {
 	var err error
 	_, err = that.mqProducer.SendSync(that.ctx.Context(), mqMessage)
 	if err != nil {
-		if that.logf != nil {
-			that.logf(klog.ErrorLevel, RocketLogTag, "Send message error: %s", err.Error())
-		}
+		that.log(klog.ErrorLevel, "Send message error: %s", err.Error())
 		if that.conf.OnError != nil {
 			that.conf.OnError(err)
 		}
@@ -258,10 +251,7 @@ func (that *Producer) publish(msg *RocketMessage) error {
 	if that.conf.Producer.AsyncSend {
 		err = that.mqProducer.SendAsync(that.ctx.Context(), func(ctx context.Context, result *primitive.SendResult, err error) {
 			if err != nil {
-				if that.logf != nil {
-					that.logf(klog.ErrorLevel, RocketLogTag, "Send message error: %s", err.Error())
-				}
-
+				that.log(klog.ErrorLevel, "Send message error: %s", err.Error())
 				if that.conf.OnError != nil {
 					that.conf.OnError(err)
 				}
@@ -270,13 +260,20 @@ func (that *Producer) publish(msg *RocketMessage) error {
 	} else {
 		_, err = that.mqProducer.SendSync(that.ctx.Context(), mqMessage)
 		if err != nil {
-			if that.logf != nil {
-				that.logf(klog.ErrorLevel, RocketLogTag, "Send message error: %s", err.Error())
-			}
+			that.log(klog.ErrorLevel, "Send message error: %s", err.Error())
 			if that.conf.OnError != nil {
 				that.conf.OnError(err)
 			}
 		}
 	}
 	return err
+}
+
+// log 日志记录, 会自动添加 RocketLogTag
+//
+//go:inline
+func (that *Producer) log(level klog.Level, format string, args ...any) {
+	if that.logf != nil {
+		that.logf(level, RocketLogTag, format, args...)
+	}
 }

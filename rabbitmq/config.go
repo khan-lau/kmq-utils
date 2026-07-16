@@ -47,36 +47,35 @@ type GoRabbitLogger struct {
 
 // Fatalf -
 func (that GoRabbitLogger) Fatalf(format string, v ...any) {
-	if that.logf != nil {
-		that.logf(klog.FatalLevel, RabbitLogPrefix, format, v...)
-	}
+	that.log(klog.FatalLevel, format, v...)
 }
 
 // Errorf -
 func (that GoRabbitLogger) Errorf(format string, v ...any) {
-	if that.logf != nil {
-		that.logf(klog.ErrorLevel, RabbitLogPrefix, format, v...)
-	}
+	that.log(klog.ErrorLevel, format, v...)
 }
 
 // Warnf -
 func (that GoRabbitLogger) Warnf(format string, v ...any) {
-	if that.logf != nil {
-		that.logf(klog.WarnLevel, RabbitLogPrefix, format, v...)
-	}
+	that.log(klog.WarnLevel, format, v...)
 }
 
 // Infof -
 func (that GoRabbitLogger) Infof(format string, v ...any) {
-	if that.logf != nil {
-		that.logf(klog.InfoLevel, RabbitLogPrefix, format, v...)
-	}
+	that.log(klog.InfoLevel, format, v...)
 }
 
 // Debugf -
 func (that GoRabbitLogger) Debugf(format string, v ...any) {
+	that.log(klog.DebugLevel, format, v...)
+}
+
+// log 日志记录, 会自动添加 RabbitLogPrefix
+//
+//go:inline
+func (that GoRabbitLogger) log(level klog.Level, format string, args ...any) {
 	if that.logf != nil {
-		that.logf(klog.DebugLevel, RabbitLogPrefix, format, v...)
+		that.logf(level, RabbitLogPrefix, format, args...)
 	}
 }
 

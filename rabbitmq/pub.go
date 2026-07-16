@@ -80,16 +80,12 @@ func (that *Producer) Start() {
 	}
 
 	that.publisher.NotifyReturn(func(r rabbitmq.Return) {
-		if that.logf != nil {
-			that.logf(klog.DebugLevel, RabbitLogTag, "message returned from server: %s", string(r.Body))
-		}
+		that.log(klog.DebugLevel, "message returned from server: %s", string(r.Body))
 	})
 
 	if that.conf.Producer.ReturnAck {
 		that.publisher.NotifyPublish(func(c rabbitmq.Confirmation) {
-			if that.logf != nil {
-				that.logf(klog.DebugLevel, RabbitLogTag, "message confirmed from server. tag: %d, ack: %d", c.DeliveryTag, c.Ack)
-			}
+			that.log(klog.DebugLevel, "message confirmed from server. tag: %d, ack: %d", c.DeliveryTag, c.Ack)
 		})
 	}
 
@@ -157,13 +153,9 @@ func (that *Producer) Close() {
 
 	select {
 	case <-done:
-		if that.logf != nil {
-			that.logf(klog.InfoLevel, RabbitLogTag, "RabbitMQ buffer drained successfully")
-		}
+		that.log(klog.InfoLevel, "RabbitMQ buffer drained successfully")
 	case <-time.After(20 * time.Second):
-		if that.logf != nil {
-			that.logf(klog.WarnLevel, RabbitLogTag, "RabbitMQ drain timeout, forcing shutdown")
-		}
+		that.log(klog.WarnLevel, "RabbitMQ drain timeout, forcing shutdown")
 	}
 
 	// 3. 关闭底层物理资源
@@ -205,4 +197,13 @@ func (that *Producer) publish(msg *RabbitMessage) error {
 		rabbitmq.WithPublishOptionsExchange(msg.Exchange),
 	)
 	return err
+}
+
+// log 日志记录, 会自动添加 RabbitLogTag
+//
+//go:inline
+func (that *Producer) log(level klog.Level, format string, args ...any) {
+	if that.logf != nil {
+		that.logf(level, RabbitLogTag, format, args...)
+	}
 }

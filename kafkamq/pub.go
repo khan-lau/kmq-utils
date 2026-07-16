@@ -16,8 +16,8 @@ type AsyncProducer struct {
 	brokerList []string
 	conf       *Config
 	Producer   sarama.AsyncProducer
-	queue      *ksync.LockedRingBuffer[KafkaMessage] // 消息队列
-	queueSize  uint                                  // 消息通道大小
+	queue      *ksync.LockedRingBuffer[*KafkaMessage] // 消息队列
+	queueSize  uint                                   // 消息通道大小
 	logf       klog.AppLogFuncWithTag
 
 	wg sync.WaitGroup // 用于同步 Close
@@ -82,7 +82,7 @@ func NewAsyncProducer(ctx *kcontext.ContextNode, queueSize uint, conf *Config, l
 		return nil, err
 	}
 
-	queue, err := ksync.NewLockedRingBuffer[KafkaMessage](uint64(queueSize))
+	queue, err := ksync.NewLockedRingBuffer[*KafkaMessage](uint64(queueSize))
 	if err != nil {
 		if logf != nil {
 			logf(klog.ErrorLevel, KafkaLogTag, "Create kafka publish queue failed: %s", err.Error())
@@ -124,35 +124,29 @@ func (that *AsyncProducer) Start() {
 				if !ok { // Producer 关闭后通道关闭，退出
 					return
 				}
-				if that.logf != nil {
-					if KafkaTraceFlag {
-						byteArr, _ := success.Value.Encode() // 比较耗时, 调试期间才需要
-						that.logf(klog.DebugLevel, KafkaLogTag, "Message sent to Kafka topic %s, partition %d, offset %d msg: %s", success.Topic, success.Partition, success.Offset, string(byteArr))
-					}
+				if KafkaTraceFlag {
+					byteArr, _ := success.Value.Encode() // 比较耗时, 调试期间才需要
+					that.log(klog.DebugLevel, "Message sent to Kafka topic %s, partition %d, offset %d msg: %s", success.Topic, success.Partition, success.Offset, string(byteArr))
 				}
 			case err, ok := <-errorsChan:
 				if !ok {
 					return
 				}
-				if that.logf != nil {
-					that.logf(klog.ErrorLevel, KafkaLogTag, "Failed to send message to Kafka topic %s, partition %d: %s", err.Msg.Topic, err.Msg.Partition, err.Err.Error())
-				}
+				that.log(klog.ErrorLevel, "Failed to send message to Kafka topic %s, partition %d: %s", err.Msg.Topic, err.Msg.Partition, err.Err.Error())
 				if that.conf.OnError != nil {
 					that.conf.OnError(err)
 				}
 			}
 		}
 
-		if that.logf != nil {
-			that.logf(klog.InfoLevel, KafkaLogTag, "kafka producer status channel done")
-		}
+		that.log(klog.InfoLevel, "kafka producer status channel done")
 	}(subCtx, &workerWg)
 
 	workerWg.Add(1)
 	go func(cancelFunc context.CancelFunc, wg *sync.WaitGroup) {
 		defer wg.Done()
 
-		buffer := make([]KafkaMessage, that.queueSize)
+		buffer := make([]*KafkaMessage, that.queueSize)
 		for {
 			// 退出逻辑：当 queue.Close() 被调用且数据排空后，n 会返回 0。
 			n := that.queue.DequeueTo(buffer)
@@ -167,9 +161,7 @@ func (that *AsyncProducer) Start() {
 		}
 		subCancel()
 
-		if that.logf != nil {
-			that.logf(klog.InfoLevel, KafkaLogTag, "kafka producer send goroutine done")
-		}
+		that.log(klog.InfoLevel, "kafka producer send goroutine done")
 	}(subCancel, &workerWg)
 
 	if that.conf != nil && that.conf.OnReady != nil {
@@ -183,19 +175,17 @@ func (that *AsyncProducer) Start() {
 		that.conf.OnExit(nil)
 	}
 
-	if that.logf != nil {
-		that.logf(klog.InfoLevel, KafkaLogTag, "kafka producer runloop done")
-	}
+	that.log(klog.InfoLevel, "kafka producer runloop done")
 }
 
-func (that *AsyncProducer) Publish(msg KafkaMessage) bool {
+func (that *AsyncProducer) Publish(msg *KafkaMessage) bool {
 	if that != nil && that.queue != nil {
 		return that.queue.Enqueue(msg)
 	}
 	return false
 }
 
-func (that *AsyncProducer) PublishArray(msgs []KafkaMessage) bool {
+func (that *AsyncProducer) PublishArray(msgs []*KafkaMessage) bool {
 	if that != nil && that.queue != nil {
 		n := that.queue.EnqueueBatch(msgs)
 		return n > 0
@@ -204,7 +194,7 @@ func (that *AsyncProducer) PublishArray(msgs []KafkaMessage) bool {
 }
 
 func (that *AsyncProducer) PublisMessage(topic, key, message string) bool {
-	msg := KafkaMessage{
+	msg := &KafkaMessage{
 		Topic:     topic,
 		Partition: 0,
 		Offset:    0,
@@ -215,7 +205,7 @@ func (that *AsyncProducer) PublisMessage(topic, key, message string) bool {
 }
 
 func (that *AsyncProducer) PublishData(partition int32, topic, key string, value []byte) bool {
-	msg := KafkaMessage{
+	msg := &KafkaMessage{
 		Topic:     topic,
 		Partition: partition,
 		Offset:    0,
@@ -230,7 +220,7 @@ func (that *AsyncProducer) PublishDataWithProperties(partition int32, topic, key
 	for k, v := range properties {
 		headers = append(headers, sarama.RecordHeader{Key: []byte(k), Value: []byte(v)})
 	}
-	msg := KafkaMessage{
+	msg := &KafkaMessage{
 		Topic:     topic,
 		Partition: partition,
 		Offset:    0,
@@ -254,11 +244,18 @@ func (that *AsyncProducer) Close() {
 	// 先关闭 Producer，利用其阻塞特性等待数据 Flush 完毕
 	if that.Producer != nil {
 		if err := that.Producer.Close(); err != nil {
-			if that.logf != nil {
-				that.logf(klog.ErrorLevel, KafkaLogTag, "Error closing sarama producer: %s", err.Error())
-			}
+			that.log(klog.ErrorLevel, "Error closing sarama producer: %s", err.Error())
 		}
 	}
 
 	that.ctx.Remove()
+}
+
+// log 日志记录, 会自动添加 KafkaLogTag
+//
+//go:inline
+func (that *AsyncProducer) log(level klog.Level, format string, args ...any) {
+	if that.logf != nil {
+		that.logf(level, KafkaLogTag, format, args...)
+	}
 }

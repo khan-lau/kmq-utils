@@ -175,13 +175,13 @@ END_LOOP:
 		case <-that.ctx.Context().Done():
 			break END_LOOP
 		case err := <-consumerErrChan:
-			if that.logf != nil {
-				that.logf(klog.ErrorLevel, RocketLogTag, "Start consumer error: %s", err.Error())
-			}
+			that.log(klog.ErrorLevel, "Start consumer error: %s", err.Error())
 			break END_LOOP
 		default:
 			if msg, ok, isValid := that.queue.TryDequeue(); ok && isValid {
 				msgHandler(that, msg)
+			} else if !isValid {
+				break END_LOOP
 			} else {
 				time.Sleep(10 * time.Millisecond)
 			}
@@ -194,9 +194,7 @@ END_LOOP:
 
 	remainLen := that.queue.Len()
 	// 只有在 Start 成功且收到退出信号时才会走到这里
-	if that.logf != nil {
-		that.logf(klog.InfoLevel, RocketLogTag, "Draining remaining %s messages...", remainLen)
-	}
+	that.log(klog.InfoLevel, "Draining remaining %s messages...", remainLen)
 
 	remainMsgs := make([]*Message, remainLen)
 	that.queue.DequeueToWait(remainMsgs, 5000*time.Millisecond)
@@ -204,9 +202,7 @@ END_LOOP:
 	for _, msg := range remainMsgs {
 		msgHandler(that, msg)
 	}
-	if that.logf != nil {
-		that.logf(klog.InfoLevel, RocketLogTag, "Drain completed.")
-	}
+	that.log(klog.InfoLevel, "Drain completed.")
 
 	if that.conf.OnExit != nil {
 		that.conf.OnExit(nil)
@@ -226,8 +222,8 @@ func (that *PushConsumer) Close() {
 	}
 	that.queue.Close()
 	err := that.mqConsumer.Shutdown()
-	if err != nil && that.logf != nil {
-		that.logf(klog.ErrorLevel, RocketLogTag, "Shutdown consumer error: %s", err.Error())
+	if err != nil {
+		that.log(klog.ErrorLevel, "Shutdown consumer error: %s", err.Error())
 	}
 
 	// 这样可以确保主程序在 Close 返回后，数据已经全处理完了
@@ -235,6 +231,15 @@ func (that *PushConsumer) Close() {
 
 	that.ctx.Cancel()
 	that.ctx.Remove()
+}
+
+// log 日志记录, 会自动添加 RocketLogTag
+//
+//go:inline
+func (that *PushConsumer) log(level klog.Level, format string, args ...any) {
+	if that.logf != nil {
+		that.logf(level, RocketLogTag, format, args...)
+	}
 }
 
 //////////////////////////////////////////////////////////////
@@ -355,9 +360,7 @@ func NewPullConsumer(ctx *kcontext.ContextNode, chanSize uint, conf *RocketConfi
 
 				msgs, err := tConsumer.pull(ctx, int(pullSize))
 				if err != nil {
-					if logf != nil {
-						logf(klog.ErrorLevel, RocketLogTag, "consumer pull error: %s", err.Error())
-					}
+					tConsumer.log(klog.ErrorLevel, "consumer pull error: %s", err.Error())
 				} else {
 					for _, msg := range msgs {
 						if tConsumer.draining.Load() {
@@ -460,9 +463,7 @@ END_LOOP:
 		case <-that.ctx.Context().Done():
 			break END_LOOP
 		case err := <-consumerErrChan:
-			if that.logf != nil {
-				that.logf(klog.ErrorLevel, RocketLogTag, "Start consumer error: %s", err.Error())
-			}
+			that.log(klog.ErrorLevel, "Start consumer error: %s", err.Error())
 			break END_LOOP
 		default:
 			if msg, ok, isValid := that.queue.TryDequeue(); ok && isValid {
@@ -475,9 +476,7 @@ END_LOOP:
 
 	remainLen := that.queue.Len()
 	// 只有在 Start 成功且收到退出信号时才会走到这里
-	if that.logf != nil {
-		that.logf(klog.InfoLevel, RocketLogTag, "Draining remaining %s messages...", remainLen)
-	}
+	that.log(klog.InfoLevel, "Draining remaining %s messages...", remainLen)
 
 	remainMsgs := make([]*Message, remainLen)
 	that.queue.DequeueToWait(remainMsgs, 5000*time.Millisecond)
@@ -485,9 +484,7 @@ END_LOOP:
 	for _, msg := range remainMsgs {
 		msgHandler(that, msg)
 	}
-	if that.logf != nil {
-		that.logf(klog.InfoLevel, RocketLogTag, "Drain completed.")
-	}
+	that.log(klog.InfoLevel, "Drain completed.")
 
 	if that.conf.OnExit != nil {
 		that.conf.OnExit(nil)
@@ -517,8 +514,8 @@ func (that *PullConsumer) Close() {
 
 	// 5. 停止底层 Client (Shutdown 会等待拉取动作返回)
 	err := that.mqConsumer.Shutdown()
-	if err != nil && that.logf != nil {
-		that.logf(klog.ErrorLevel, RocketLogTag, "Shutdown consumer error: %s", err.Error())
+	if err != nil {
+		that.log(klog.ErrorLevel, "Shutdown consumer error: %s", err.Error())
 	}
 
 	// 6. 核心：等待 SyncSubscribe 排水完毕后再返回
@@ -538,5 +535,14 @@ func (that *PullConsumer) handleMsg(msg *Message, callback MessageHandler) {
 		if that.conf.Consumer.AutoCommit == AUTO_COMMIT_CUSTOM {
 			_ = msg.Ack()
 		}
+	}
+}
+
+// log 日志记录, 会自动添加 RocketLogTag
+//
+//go:inline
+func (that *PullConsumer) log(level klog.Level, format string, args ...any) {
+	if that.logf != nil {
+		that.logf(level, RocketLogTag, format, args...)
 	}
 }

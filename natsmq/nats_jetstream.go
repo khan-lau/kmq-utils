@@ -132,7 +132,9 @@ func (that *NatsJetStreamClient) Close() {
 
 	select {
 	case <-done:
+		that.log(klog.InfoLevel, "NatsJetStreamClient buffer drained successfully")
 	case <-time.After(20 * time.Second):
+		that.log(klog.WarnLevel, "NatsJetStreamClient drain timeout, forcing shutdown")
 	}
 
 	// 4. 断开 NATS 连接
@@ -177,9 +179,7 @@ func (that *NatsJetStreamClient) doConnect() error {
 		// 加载客户端证书和密钥
 		cert, err := tls.LoadX509KeyPair(that.conf.Nats().TlsClientCert(), that.conf.Nats().KeyPath())
 		if err != nil {
-			if that.logf != nil {
-				that.logf(klog.WarnLevel, NatsLogTag, "Error parsing X509 certificate/key pair: %v", err)
-			}
+			that.log(klog.WarnLevel, "Error parsing X509 certificate/key pair: %v", err)
 			return err
 		}
 
@@ -198,9 +198,7 @@ func (that *NatsJetStreamClient) doConnect() error {
 			// 获取证书池
 			systemCertPool, err = x509.SystemCertPool()
 			if err != nil {
-				if that.logf != nil {
-					that.logf(klog.WarnLevel, NatsLogTag, "Warning: Could not load system root CA pool: %v. Using empty pool.", err)
-				}
+				that.log(klog.WarnLevel, "Warning: Could not load system root CA pool: %v. Using empty pool.", err)
 				systemCertPool = x509.NewCertPool()
 			}
 			tlsConfig.RootCAs = systemCertPool
@@ -232,9 +230,7 @@ func (that *NatsJetStreamClient) doConnect() error {
 	// Connect to a server
 	conn, err := nats.Connect(strings.Join(that.conf.nats.Servers(), ","), opts...) // 连接NATS服务器, 允许同时连接多个服务器地址, 逗号分隔
 	if err != nil {
-		// if that.logf != nil {
-		// 	that.logf(klog.WarnLevel, NatsLogTag, "Connect error: %v", err)
-		// }
+		// that.log(klog.WarnLevel, "Connect error: %v", err)
 		if that.conf.OnError() != nil {
 			that.conf.OnError()(err)
 		}
@@ -245,17 +241,13 @@ func (that *NatsJetStreamClient) doConnect() error {
 
 	js, err := that.conn.JetStream()
 	if err != nil {
-		// if that.logf != nil {
-		// 	that.logf(klog.WarnLevel, NatsLogTag, "JetStream error: %v", err)
-		// }
+		// that.log(klog.WarnLevel, "JetStream error: %v", err)
 		return err
 	}
 	that.js = js
 	stream, err := that.upsertJetstream(js)
 	if err != nil {
-		// if that.logf != nil {
-		// 	that.logf(klog.WarnLevel, NatsLogTag, "upsert JetStream error: %v", err)
-		// }
+		// that.log(klog.WarnLevel, "upsert JetStream error: %v", err)
 		return err
 	}
 
@@ -305,9 +297,7 @@ func (that *NatsJetStreamClient) startDrainPipe() {
 						if !that.connected.Load() {
 							// 如果你希望“死等”，就继续 Sleep
 							// 如果你希望“超时放弃”，可以通过检查一个时间戳来决定是否 return
-							if that.logf != nil {
-								that.logf(klog.WarnLevel, NatsLogTag, "Drain failed due to disconnected link, dropping remaining messages.")
-							}
+							that.log(klog.WarnLevel, "Drain failed due to disconnected link, dropping remaining messages.")
 							return
 						}
 					}
@@ -340,9 +330,7 @@ func (that *NatsJetStreamClient) syncSubscriptions() error {
 		if handler != nil {
 			meta, err := msg.Metadata()
 			if err != nil {
-				if that.logf != nil {
-					that.logf(klog.WarnLevel, NatsLogTag, "Failed to get message metadata: %v", err)
-				}
+				that.log(klog.WarnLevel, "Failed to get message metadata: %v", err)
 				return
 			}
 			handler(that, &NatsMessage{Seq: meta.Timestamp.UnixNano(), Topic: msg.Subject, Reply: msg.Reply, Header: msg.Header, Payload: msg.Data, origin: msg})
@@ -350,8 +338,8 @@ func (that *NatsJetStreamClient) syncSubscriptions() error {
 
 		if that.conf.jetStream.consumer != nil && (that.conf.jetStream.consumer.AutoCommit() == AUTO_COMMIT_NATIVE || that.conf.jetStream.consumer.AutoCommit() == AUTO_COMMIT_CUSTOM) {
 			err := msg.Ack()
-			if err != nil && that.logf != nil {
-				that.logf(klog.WarnLevel, NatsLogTag, "Failed to ack topic: %s, message: %v", msg.Subject, err)
+			if err != nil {
+				that.log(klog.WarnLevel, "Failed to ack topic: %s, message: %v", msg.Subject, err)
 			}
 		}
 	}
@@ -369,9 +357,7 @@ func (that *NatsJetStreamClient) syncSubscriptions() error {
 		}
 
 		if err != nil {
-			if that.logf != nil {
-				that.logf(klog.WarnLevel, NatsLogTag, "%s error: %v", (condexpr.CondExpr(len(that.conf.JetStream().Consumer().Name()) > 0, "QueueSubscribe", "Subscribe")), err)
-			}
+			that.log(klog.WarnLevel, "%s error: %v", (condexpr.CondExpr(len(that.conf.JetStream().Consumer().Name()) > 0, "QueueSubscribe", "Subscribe")), err)
 			return err
 		}
 
@@ -406,22 +392,16 @@ func (that *NatsJetStreamClient) upsertJetstream(js nats.JetStreamContext) (*nat
 	stream, err := js.AddStream(jsCfg)
 	if err != nil {
 		if !errors.Is(err, nats.ErrStreamNameAlreadyInUse) {
-			// if that.logf != nil {
-			// 	that.logf(klog.WarnLevel, NatsLogTag, "AddStream error: %v", err)
-			// }
+			// that.log(klog.WarnLevel, "AddStream error: %v", err)
 			return nil, err
 		} else {
 			// 如果jetstream存在, 则更新配置
 			stream, err = js.UpdateStream(jsCfg)
 			if err != nil {
 				if strings.Contains(err.Error(), "stream configuration update can not change MaxConsumers") {
-					if that.logf != nil {
-						that.logf(klog.WarnLevel, NatsLogTag, "Ignoring MaxConsumers update error: %v", err)
-					}
+					that.log(klog.WarnLevel, "Ignoring MaxConsumers update error: %v", err)
 				} else {
-					// if that.logf != nil {
-					// 	that.logf(klog.WarnLevel, NatsLogTag, "AddStream error: %v", err)
-					// }
+					// that.log(klog.WarnLevel, "AddStream error: %v", err)
 					// return nil, err
 				}
 
@@ -463,15 +443,11 @@ func (that *NatsJetStreamClient) upsertConsumer(js nats.JetStreamContext) (*nats
 		if errors.Is(err, nats.ErrConsumerNotFound) {
 			consumer, err = js.AddConsumer(that.conf.JetStream().Name(), consumerCfg)
 			if err != nil {
-				if that.logf != nil {
-					that.logf(klog.WarnLevel, NatsLogTag, "Create Consumer error: %v", err)
-				}
+				that.log(klog.WarnLevel, "Create Consumer error: %v", err)
 				return nil, err
 			}
 		} else {
-			if that.logf != nil {
-				that.logf(klog.WarnLevel, NatsLogTag, "Get Consumer error: %v", err)
-			}
+			that.log(klog.WarnLevel, "Get Consumer error: %v", err)
 			return nil, err
 		}
 	}
@@ -496,10 +472,17 @@ func (that *NatsJetStreamClient) publishData(msg *NatsMessage, msgId string) err
 	} else {
 		// id重复, 被服务器忽略了, 不会投递到订阅者中
 		if ack.Duplicate {
-			if that.logf != nil {
-				that.logf(klog.WarnLevel, NatsLogTag, "Publish duplicate: %v", ack)
-			}
+			that.log(klog.WarnLevel, "Publish duplicate: %v", ack)
 		}
 	}
 	return nil
+}
+
+// log 日志记录, 会自动添加 NatsLogTag
+//
+//go:inline
+func (that *NatsJetStreamClient) log(level klog.Level, format string, args ...any) {
+	if that.logf != nil {
+		that.logf(level, NatsLogTag, format, args...)
+	}
 }

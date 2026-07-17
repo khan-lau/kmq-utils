@@ -23,7 +23,7 @@ func NewConsumer(conf *RabbitConfig, logf klog.AppLogFuncWithTag) (*Consumer, er
 
 	if len(conf.Addrs) == 0 {
 		if logf != nil {
-			logf(klog.ErrorLevel, RabbitLogTag, "RabbitMQ config addrs is empty")
+			logf(klog.ErrorLevel, RabbitLogTag, 0, "RabbitMQ config addrs is empty")
 		}
 		return nil, ErrEmptyAddrs
 	}
@@ -156,6 +156,6 @@ func (that *Consumer) Close() {
 //go:inline
 func (that *Consumer) log(level klog.Level, format string, args ...any) {
 	if that.logf != nil {
-		that.logf(level, RabbitLogTag, format, args...)
+		that.logf(level, RabbitLogTag, 1, format, args...)
 	}
 }

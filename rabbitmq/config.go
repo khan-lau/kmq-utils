@@ -75,7 +75,7 @@ func (that GoRabbitLogger) Debugf(format string, v ...any) {
 //go:inline
 func (that GoRabbitLogger) log(level klog.Level, format string, args ...any) {
 	if that.logf != nil {
-		that.logf(level, RabbitLogPrefix, format, args...)
+		that.logf(level, RabbitLogPrefix, 1, format, args...)
 	}
 }
 

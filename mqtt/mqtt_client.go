@@ -43,7 +43,7 @@ func NewMqttClient(ctx *kcontext.ContextNode, queueSize uint, conf *Config, logf
 	queue, err := ksync.NewLockedRingBuffer[*MqttMessage](uint64(queueSize))
 	if err != nil {
 		if logf != nil {
-			logf(klog.ErrorLevel, MqttLogTag, "Create mqtt queue failed: %s", err.Error())
+			logf(klog.ErrorLevel, MqttLogTag, 0, "Create mqtt queue failed: %s", err.Error())
 		}
 		return nil, err
 	}
@@ -284,6 +284,6 @@ func (that *MqttClient) startDrainPipe() {
 //go:inline
 func (that *MqttClient) log(level klog.Level, format string, args ...any) {
 	if that.logf != nil {
-		that.logf(level, MqttLogTag, format, args...)
+		that.logf(level, MqttLogTag, 1, format, args...)
 	}
 }

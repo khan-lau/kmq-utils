@@ -34,13 +34,13 @@ func NewProducer(ctx *kcontext.ContextNode, queueSize uint, conf *RabbitConfig, 
 	queue, err := ksync.NewLockedRingBuffer[*RabbitMessage](uint64(queueSize))
 	if err != nil {
 		if logf != nil {
-			logf(klog.ErrorLevel, RabbitLogTag, "Create rabbit publish queue failed: %s", err.Error())
+			logf(klog.ErrorLevel, RabbitLogTag, 0, "Create rabbit publish queue failed: %s", err.Error())
 		}
 		return nil, err
 	}
 	if len(conf.Addrs) == 0 {
 		if logf != nil {
-			logf(klog.ErrorLevel, RabbitLogTag, "RabbitMQ config addrs is empty")
+			logf(klog.ErrorLevel, RabbitLogTag, 0, "RabbitMQ config addrs is empty")
 		}
 		return nil, ErrEmptyAddrs
 	}
@@ -204,6 +204,6 @@ func (that *Producer) publish(msg *RabbitMessage) error {
 //go:inline
 func (that *Producer) log(level klog.Level, format string, args ...any) {
 	if that.logf != nil {
-		that.logf(level, RabbitLogTag, format, args...)
+		that.logf(level, RabbitLogTag, 1, format, args...)
 	}
 }

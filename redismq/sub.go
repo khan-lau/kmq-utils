@@ -32,7 +32,7 @@ type RedisSub struct {
 func NewRedisSub(ctx *kcontext.ContextNode, bufferSize uint, conf *RedisConfig, logf klog.AppLogFuncWithTag) (*RedisSub, error) {
 	if len(conf.Addrs) == 0 {
 		if logf != nil {
-			logf(klog.ErrorLevel, RedisLogTag, "redis config addrs is empty")
+			logf(klog.ErrorLevel, RedisLogTag, 0, "redis config addrs is empty")
 		}
 		return nil, ErrEmptyAddrs
 	}
@@ -213,6 +213,6 @@ func (that *RedisSub) receivedMessage(topic string, payload any) (*kredis.RedisM
 //go:inline
 func (that *RedisSub) log(level klog.Level, format string, args ...any) {
 	if that.logf != nil {
-		that.logf(level, RedisLogTag, format, args...)
+		that.logf(level, RedisLogTag, 1, format, args...)
 	}
 }

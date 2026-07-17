@@ -73,7 +73,7 @@ func NewConsumerGroup(ctx *kcontext.ContextNode, bufferSize uint, conf *Config, 
 	// 若通过环境变量提供了 Kerberos 配置，则启用 Kerberos 认证
 	if err := applyConsumerKerberosEnv(config); err != nil {
 		if logf != nil {
-			logf(klog.ErrorLevel, KafkaLogTag, "enable Kerberos failed: %s", err.Error())
+			logf(klog.ErrorLevel, KafkaLogTag, 0, "enable Kerberos failed: %s", err.Error())
 		}
 		return nil, err
 	}
@@ -82,7 +82,7 @@ func NewConsumerGroup(ctx *kcontext.ContextNode, bufferSize uint, conf *Config, 
 	client, err := sarama.NewClient(brokerList, config)
 	if err != nil {
 		if logf != nil {
-			logf(klog.ErrorLevel, KafkaLogTag, "kafka.NewClient error: %s", err.Error())
+			logf(klog.ErrorLevel, KafkaLogTag, 0, "kafka.NewClient error: %s", err.Error())
 		}
 		return nil, err
 	}
@@ -90,7 +90,7 @@ func NewConsumerGroup(ctx *kcontext.ContextNode, bufferSize uint, conf *Config, 
 	group, err := sarama.NewConsumerGroupFromClient(conf.GroupID, client)
 	if err != nil {
 		if logf != nil {
-			logf(klog.ErrorLevel, KafkaLogTag, "kafka.NewConsumerGroup error: %s", err.Error())
+			logf(klog.ErrorLevel, KafkaLogTag, 0, "kafka.NewConsumerGroup error: %s", err.Error())
 		}
 		return nil, err
 	}
@@ -101,7 +101,7 @@ func NewConsumerGroup(ctx *kcontext.ContextNode, bufferSize uint, conf *Config, 
 	queue, err := ksync.NewLockedRingBuffer[*KafkaMessage](uint64(bufferSize))
 	if err != nil {
 		if logf != nil {
-			logf(klog.ErrorLevel, KafkaLogTag, "Create kafka subscribe queue failed: %s", err.Error())
+			logf(klog.ErrorLevel, KafkaLogTag, 0, "Create kafka subscribe queue failed: %s", err.Error())
 		}
 		return nil, err
 	}
@@ -255,7 +255,7 @@ func (that *ConsumerGroup) Close() {
 //go:inline
 func (that *ConsumerGroup) log(level klog.Level, format string, args ...any) {
 	if that.logf != nil {
-		that.logf(level, KafkaLogTag, format, args...)
+		that.logf(level, KafkaLogTag, 1, format, args...)
 	}
 }
 
@@ -380,6 +380,6 @@ func (that *privateConsumerGroupHandler) isParentCtxDone() bool {
 //go:inline
 func (that *privateConsumerGroupHandler) log(level klog.Level, format string, args ...any) {
 	if that.logf != nil {
-		that.logf(level, KafkaGroupHandlerLogTag, format, args...)
+		that.logf(level, KafkaGroupHandlerLogTag, 1, format, args...)
 	}
 }

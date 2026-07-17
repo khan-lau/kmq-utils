@@ -36,7 +36,7 @@ func NewRedisPub(ctx *kcontext.ContextNode, queueSize uint, conf *RedisConfig, l
 
 	if len(conf.Addrs) == 0 {
 		if logf != nil {
-			logf(klog.ErrorLevel, RedisLogTag, "redis config addrs is empty")
+			logf(klog.ErrorLevel, RedisLogTag, 0, "redis config addrs is empty")
 		}
 		return nil, ErrEmptyAddrs
 	}
@@ -46,7 +46,7 @@ func NewRedisPub(ctx *kcontext.ContextNode, queueSize uint, conf *RedisConfig, l
 	queue, err := ksync.NewLockedRingBuffer[*kredis.RedisMessage](uint64(queueSize))
 	if err != nil {
 		if logf != nil {
-			logf(klog.ErrorLevel, RedisLogTag, "Create redisPub queue failed: %s", err.Error())
+			logf(klog.ErrorLevel, RedisLogTag, 0, "Create redisPub queue failed: %s", err.Error())
 		}
 		return nil, err
 	}
@@ -336,6 +336,6 @@ func (that *RedisPub) onError(err error) {
 //go:inline
 func (that *RedisPub) log(level klog.Level, format string, args ...any) {
 	if that.logf != nil {
-		that.logf(level, RedisLogTag, format, args...)
+		that.logf(level, RedisLogTag, 1, format, args...)
 	}
 }

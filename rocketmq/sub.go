@@ -238,7 +238,7 @@ func (that *PushConsumer) Close() {
 //go:inline
 func (that *PushConsumer) log(level klog.Level, format string, args ...any) {
 	if that.logf != nil {
-		that.logf(level, RocketLogTag, format, args...)
+		that.logf(level, RocketLogTag, 1, format, args...)
 	}
 }
 
@@ -543,6 +543,6 @@ func (that *PullConsumer) handleMsg(msg *Message, callback MessageHandler) {
 //go:inline
 func (that *PullConsumer) log(level klog.Level, format string, args ...any) {
 	if that.logf != nil {
-		that.logf(level, RocketLogTag, format, args...)
+		that.logf(level, RocketLogTag, 1, format, args...)
 	}
 }

@@ -45,7 +45,7 @@ func NewNatsCoreClient(ctx *kcontext.ContextNode, queueSize uint, conf *NatsClie
 	queue, err := ksync.NewLockedRingBuffer[*NatsMessage](uint64(queueSize))
 	if err != nil {
 		if logf != nil {
-			logf(klog.ErrorLevel, NatsLogTag, "Create natsmq queue failed: %s", err.Error())
+			logf(klog.ErrorLevel, NatsLogTag, 0, "Create natsmq queue failed: %s", err.Error())
 		}
 		return nil, err
 	}
@@ -338,6 +338,6 @@ func (that *NatsCoreClient) syncSubscriptions() error {
 //go:inline
 func (that *NatsCoreClient) log(level klog.Level, format string, args ...any) {
 	if that.logf != nil {
-		that.logf(level, NatsLogTag, format, args...)
+		that.logf(level, NatsLogTag, 1, format, args...)
 	}
 }

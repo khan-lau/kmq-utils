@@ -68,7 +68,7 @@ func NewAsyncProducer(ctx *kcontext.ContextNode, queueSize uint, conf *Config, l
 	// 若通过环境变量提供了 Kerberos 配置，则启用 Kerberos 认证
 	if err := applyProducerKerberosEnv(config); err != nil {
 		if logf != nil {
-			logf(klog.ErrorLevel, KafkaLogTag, "enable Kerberos failed: %s", err.Error())
+			logf(klog.ErrorLevel, KafkaLogTag, 0, "enable Kerberos failed: %s", err.Error())
 		}
 		return nil, err
 	}
@@ -77,7 +77,7 @@ func NewAsyncProducer(ctx *kcontext.ContextNode, queueSize uint, conf *Config, l
 	producer, err := sarama.NewAsyncProducer(brokerList, config)
 	if err != nil {
 		if logf != nil {
-			logf(klog.ErrorLevel, KafkaLogTag, "kafka.NewAsyncProducer error: %s", err.Error())
+			logf(klog.ErrorLevel, KafkaLogTag, 0, "kafka.NewAsyncProducer error: %s", err.Error())
 		}
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func NewAsyncProducer(ctx *kcontext.ContextNode, queueSize uint, conf *Config, l
 	queue, err := ksync.NewLockedRingBuffer[*KafkaMessage](uint64(queueSize))
 	if err != nil {
 		if logf != nil {
-			logf(klog.ErrorLevel, KafkaLogTag, "Create kafka publish queue failed: %s", err.Error())
+			logf(klog.ErrorLevel, KafkaLogTag, 0, "Create kafka publish queue failed: %s", err.Error())
 		}
 		return nil, err
 	}
@@ -256,6 +256,6 @@ func (that *AsyncProducer) Close() {
 //go:inline
 func (that *AsyncProducer) log(level klog.Level, format string, args ...any) {
 	if that.logf != nil {
-		that.logf(level, KafkaLogTag, format, args...)
+		that.logf(level, KafkaLogTag, 1, format, args...)
 	}
 }

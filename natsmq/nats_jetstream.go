@@ -483,6 +483,6 @@ func (that *NatsJetStreamClient) publishData(msg *NatsMessage, msgId string) err
 //go:inline
 func (that *NatsJetStreamClient) log(level klog.Level, format string, args ...any) {
 	if that.logf != nil {
-		that.logf(level, NatsLogTag, format, args...)
+		that.logf(level, NatsLogTag, 1, format, args...)
 	}
 }

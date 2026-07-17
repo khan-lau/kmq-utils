@@ -74,7 +74,7 @@ func NewProducer(ctx *kcontext.ContextNode, queueSize uint, conf *RocketConfig, 
 	queue, err := ksync.NewLockedRingBuffer[*RocketMessage](uint64(queueSize))
 	if err != nil {
 		if logf != nil {
-			logf(klog.ErrorLevel, RocketLogTag, "Create rocketmq publish queue failed: %s", err.Error())
+			logf(klog.ErrorLevel, RocketLogTag, 0, "Create rocketmq publish queue failed: %s", err.Error())
 		}
 		return nil, err
 	}
@@ -274,6 +274,6 @@ func (that *Producer) publish(msg *RocketMessage) error {
 //go:inline
 func (that *Producer) log(level klog.Level, format string, args ...any) {
 	if that.logf != nil {
-		that.logf(level, RocketLogTag, format, args...)
+		that.logf(level, RocketLogTag, 1, format, args...)
 	}
 }

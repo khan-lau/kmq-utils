@@ -14,8 +14,8 @@ const (
 	NatsLogTag = "natsmq"
 
 	AUTO_COMMIT_NATIVE = "native" // 原生自动提交
-	AUTO_COMMIT_CUSTOM = "custom" // 客户端实现自动提交
-	AUTO_COMMIT_NONE   = "none"   // 手动提交
+	// AUTO_COMMIT_CUSTOM = "custom" // 客户端实现自动提交
+	AUTO_COMMIT_NONE = "none" // 手动提交
 )
 
 type MessageHandler func(voidObj any, msg *NatsMessage) // 消息处理回调函数

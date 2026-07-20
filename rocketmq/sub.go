@@ -532,9 +532,9 @@ func (that *PullConsumer) Close() {
 func (that *PullConsumer) handleMsg(msg *Message, callback MessageHandler) {
 	if callback != nil {
 		callback(that, msg)
-		if that.conf.Consumer.AutoCommit == AUTO_COMMIT_CUSTOM {
-			_ = msg.Ack()
-		}
+		// if that.conf.Consumer.AutoCommit == AUTO_COMMIT_CUSTOM {
+		// 	_ = msg.Ack()
+		// }
 	}
 }
 

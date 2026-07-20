@@ -23,8 +23,8 @@ const (
 	DEFAULT_OFFSET = KAFKA_OFFSET_NEWEST
 
 	AUTO_COMMIT_NATIVE = "native" // 原生自动提交
-	AUTO_COMMIT_CUSTOM = "custom" // 客户端实现自动提交
-	AUTO_COMMIT_NONE   = "none"   // 手动提交
+	// AUTO_COMMIT_CUSTOM = "custom" // 客户端实现自动提交
+	AUTO_COMMIT_NONE = "none" // 手动提交
 )
 
 const (
@@ -136,6 +136,7 @@ type NetConfig struct {
 	DialTimeout     time.Duration // connect 超时时间
 	ReadTimeout     time.Duration // read 超时时间
 	WriteTimeout    time.Duration // write 超时时间
+	KeepAlive       time.Duration // 保持连接时间间隔, 默认30秒
 	ResolveHost     bool          // 是否使用域名, 使用集群域名时设置为true
 }
 
@@ -145,6 +146,7 @@ func NewNetConfig() *NetConfig {
 		DialTimeout:     30000 * time.Millisecond,
 		ReadTimeout:     120000 * time.Millisecond,
 		WriteTimeout:    10000 * time.Millisecond,
+		KeepAlive:       30000 * time.Millisecond,
 		ResolveHost:     false,
 	}
 }
@@ -166,6 +168,11 @@ func (that *NetConfig) SetWriteTimeout(writeTimeout time.Duration) *NetConfig {
 
 func (that *NetConfig) SetMaxOpenRequests(maxOpenRequests int) *NetConfig {
 	that.MaxOpenRequests = maxOpenRequests
+	return that
+}
+
+func (that *NetConfig) SetKeepAlive(keepAlive time.Duration) *NetConfig {
+	that.KeepAlive = keepAlive
 	return that
 }
 
@@ -242,12 +249,12 @@ func (that *ConsumerConfig) NativeAutoCommit(interval time.Duration) *ConsumerCo
 	return that
 }
 
-// 设置工具库自行实现的自动提交
-func (that *ConsumerConfig) CustomAutoCommit() *ConsumerConfig {
-	that.AutoCommit = AUTO_COMMIT_CUSTOM
-	that.AutoCommitInterval = 1000 * time.Millisecond
-	return that
-}
+// // 设置工具库自行实现的自动提交
+// func (that *ConsumerConfig) CustomAutoCommit() *ConsumerConfig {
+// 	that.AutoCommit = AUTO_COMMIT_CUSTOM
+// 	that.AutoCommitInterval = 1000 * time.Millisecond
+// 	return that
+// }
 
 // 设置为手动提交
 func (that *ConsumerConfig) DisableAutoCommit() *ConsumerConfig {

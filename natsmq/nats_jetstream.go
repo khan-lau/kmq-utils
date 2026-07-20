@@ -336,7 +336,8 @@ func (that *NatsJetStreamClient) syncSubscriptions() error {
 			handler(that, &NatsMessage{Seq: meta.Timestamp.UnixNano(), Topic: msg.Subject, Reply: msg.Reply, Header: msg.Header, Payload: msg.Data, origin: msg})
 		}
 
-		if that.conf.jetStream.consumer != nil && (that.conf.jetStream.consumer.AutoCommit() == AUTO_COMMIT_NATIVE || that.conf.jetStream.consumer.AutoCommit() == AUTO_COMMIT_CUSTOM) {
+		// if that.conf.jetStream.consumer != nil && (that.conf.jetStream.consumer.AutoCommit() == AUTO_COMMIT_NATIVE || that.conf.jetStream.consumer.AutoCommit() == AUTO_COMMIT_CUSTOM) {
+		if that.conf.jetStream.consumer != nil && (that.conf.jetStream.consumer.AutoCommit() == AUTO_COMMIT_NATIVE) {
 			err := msg.Ack()
 			if err != nil {
 				that.log(klog.WarnLevel, "Failed to ack topic: %s, message: %v", msg.Subject, err)

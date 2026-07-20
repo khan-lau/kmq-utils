@@ -109,7 +109,8 @@ func (that *Consumer) SyncSubscribe() {
 		// rabbitmq.NackDiscard, 失败处理，但错误是永久性的，所以直接丢弃消息。
 		// rabbitmq.NackRequeue, 失败处理，但错误是暂时性的，所以重新入队，等待再次处理。
 		// rabbitmq.Manual, 手动处理，需要调用msg.Ack()或msg.Nack()
-		if that.conf.Consumer.AutoCommit == AUTO_COMMIT_NATIVE || that.conf.Consumer.AutoCommit == AUTO_COMMIT_CUSTOM {
+		// if that.conf.Consumer.AutoCommit == AUTO_COMMIT_NATIVE || that.conf.Consumer.AutoCommit == AUTO_COMMIT_CUSTOM {
+		if that.conf.Consumer.AutoCommit == AUTO_COMMIT_NATIVE {
 			return rabbitmq.Ack
 		} else {
 			return rabbitmq.Manual

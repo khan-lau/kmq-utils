@@ -21,8 +21,8 @@ const (
 	RABBIT_TYPE_RPC    = RabbitWorkType(iota + 5) // RPC模式
 
 	AUTO_COMMIT_NATIVE = "native" // 原生自动提交
-	AUTO_COMMIT_CUSTOM = "custom" // 客户端实现自动提交
-	AUTO_COMMIT_NONE   = "none"   // 手动提交
+	// AUTO_COMMIT_CUSTOM = "custom" // 客户端实现自动提交
+	AUTO_COMMIT_NONE = "none" // 手动提交
 
 )
 

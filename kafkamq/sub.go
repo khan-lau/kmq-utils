@@ -65,6 +65,7 @@ func NewConsumerGroup(ctx *kcontext.ContextNode, bufferSize uint, conf *Config, 
 	config.Net.DialTimeout = conf.Net.DialTimeout         // 连接超时时间，默认为30秒
 	config.Net.ReadTimeout = conf.Net.ReadTimeout         // 从连接读取消息的超时时间，默认为120秒
 	config.Net.WriteTimeout = conf.Net.WriteTimeout       // 向连接写入消息的超时时间，默认为10秒
+	config.Net.KeepAlive = conf.Net.KeepAlive             // 保持连接时间间隔，默认为30秒
 
 	// 这一行的作用是: 设置客户端是否在连接 Kafka 时尝试解析 Kafka 集群的主机名称, 默认为 true。
 	// 如果设置为 true, 当 Kafka 集群的主机名称为 IP 地址时, 可能会导致连接失败, 因此这里设置为 false。
@@ -353,14 +354,14 @@ func (that *privateConsumerGroupHandler) ConsumeClaim(session sarama.ConsumerGro
 			break
 		}
 
-		// 只有真正成功入队的数据，才在符合条件时触发手动标记/提交
-		// （注意：如果你用的是 AUTO_COMMIT_NATIVE，下面这段原本就不用写，留空即可）
-		if that.AutoCommit == AUTO_COMMIT_CUSTOM {
-			session.MarkMessage(msg, "")
-			if msg.Offset%500 == 0 {
-				session.Commit()
-			}
-		}
+		session.MarkMessage(msg, "")
+		// // 只有真正成功入队的数据，才在符合条件时触发手动标记/提交
+		// // （注意：如果你用的是 AUTO_COMMIT_NATIVE，下面这段原本就不用写，留空即可）
+		// if that.AutoCommit == AUTO_COMMIT_CUSTOM {
+		// 	if msg.Offset%500 == 0 {
+		// 		session.Commit()
+		// 	}
+		// }
 	}
 	return nil
 }

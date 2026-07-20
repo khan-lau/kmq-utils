@@ -46,6 +46,7 @@ func NewAsyncProducer(ctx *kcontext.ContextNode, queueSize uint, conf *Config, l
 	config.Net.DialTimeout = conf.Net.DialTimeout         // 连接超时时间，默认为30秒
 	config.Net.ReadTimeout = conf.Net.ReadTimeout         // 从连接读取消息的超时时间，默认为120秒
 	config.Net.WriteTimeout = conf.Net.WriteTimeout       // 向连接写入消息的超时时间，默认为10秒
+	config.Net.KeepAlive = conf.Net.KeepAlive             // 保持连接时间间隔，默认为30秒
 
 	// 这一行的作用是: 设置客户端是否在连接 Kafka 时尝试解析 Kafka 集群的主机名称, 默认为 false
 	// 如果设置为 true, 当 Kafka 集群的主机名称为 IP 地址时, 可能会导致连接失败, 因此这里设置为 false。

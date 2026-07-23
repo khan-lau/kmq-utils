@@ -19,7 +19,7 @@ const (
 
 type RedisPub struct {
 	ctx          *kcontext.ContextNode
-	redisHandler *kredis.KRedis
+	redisHandler *RedisToolkit
 
 	started    atomic.Bool                                   // 是否已经启动过（防止重复启动 goroutine）
 	draining   atomic.Bool                                   // 正在关闭中, true 表示正在关闭中, false 表示正常运行中, 默认为false
@@ -41,7 +41,8 @@ func NewRedisPub(ctx *kcontext.ContextNode, queueSize uint, conf *RedisConfig, l
 		return nil, ErrEmptyAddrs
 	}
 
-	redisHD := kredis.NewKRedis(subCtx, conf.Addrs[0], "", conf.Password, conf.DB)
+	// redisHD := kredis.NewKRedis(subCtx, conf.Addrs[0], "", conf.Password, conf.DB)
+	redisHD := NewRedisToolkit(subCtx, conf, logf)
 
 	queue, err := ksync.NewLockedRingBuffer[*kredis.RedisMessage](uint64(queueSize))
 	if err != nil {
@@ -173,7 +174,8 @@ func (that *RedisPub) dbConnect() bool {
 			subCtx.Remove()
 		}
 		subCtx = that.ctx.NewChild(ctxName)
-		that.redisHandler = kredis.NewKRedis(subCtx, that.conf.Addrs[0], "", that.conf.Password, int(that.conf.DB))
+		// that.redisHandler = kredis.NewKRedis(subCtx, that.conf.Addrs[0], "", that.conf.Password, int(that.conf.DB))
+		that.redisHandler = NewRedisToolkit(subCtx, that.conf, that.logf)
 	}
 
 	if !that.redisHandler.Ping() { //探测连接失败

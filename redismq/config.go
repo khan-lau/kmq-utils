@@ -12,6 +12,7 @@ const (
 
 var (
 	ErrEmptyAddrs = errors.New("empty addrs")
+	ErrWrapError  = errors.New("wrap error")
 )
 
 /////////////////////////////////////////////////////////////

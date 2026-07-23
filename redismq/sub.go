@@ -18,7 +18,7 @@ import (
 type RedisSub struct {
 	ctx          *kcontext.ContextNode
 	conf         *RedisConfig
-	redisHandler *kredis.KRedis
+	redisHandler *RedisToolkit
 
 	started   atomic.Bool // 是否已经启动过（防止重复启动 goroutine）
 	draining  atomic.Bool // 正在关闭中, true 表示正在关闭中, false 表示正常运行中, 默认为false
@@ -38,7 +38,9 @@ func NewRedisSub(ctx *kcontext.ContextNode, bufferSize uint, conf *RedisConfig, 
 	}
 
 	subCtx := ctx.NewChild("redismq_pubsub")
-	redisHD := kredis.NewKRedis(subCtx, conf.Addrs[0], "", conf.Password, conf.DB)
+	// redisHD := kredis.NewKRedis(subCtx, conf.Addrs[0], "", conf.Password, conf.DB)
+	redisHD := NewRedisToolkit(subCtx, conf, logf)
+
 	redisPs := &RedisSub{
 		ctx:          ctx,
 		conf:         conf,
@@ -138,7 +140,8 @@ func (that *RedisSub) dbConnect() bool {
 			subCtx.Remove()
 		}
 		subCtx = that.ctx.NewChild(ctxName)
-		that.redisHandler = kredis.NewKRedis(subCtx, that.conf.Addrs[0], "", that.conf.Password, int(that.conf.DB))
+		// that.redisHandler = kredis.NewKRedis(subCtx, that.conf.Addrs[0], "", that.conf.Password, int(that.conf.DB))
+		that.redisHandler = NewRedisToolkit(subCtx, that.conf, that.logf)
 	}
 
 	if !that.redisHandler.Ping() { //探测连接失败
@@ -181,11 +184,13 @@ func (that *RedisSub) startSubscription() {
 		}
 	}
 
-	that.redisHandler.SyncPSubscribeWithChanSize(1000, int(that.bufferSize),
+	// 依赖业务层的链路自动回复机制
+	that.redisHandler.SyncPSubscribeReceive(
+		// // 依赖go-redis v9封装的链路自动回复机制
+		// that.redisHandler.SyncPSubscribeWithChanSize(1000, int(that.bufferSize),
 		func(err error, topic string, payload any) {
 			if err != nil {
 				that.onError(err)
-
 			} else {
 				msg, err := that.receivedMessage(topic, payload)
 				if nil != err {

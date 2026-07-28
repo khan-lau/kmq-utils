@@ -31,7 +31,7 @@ type NatsCoreClient struct {
 	subs map[string]*nats.Subscription // 订阅列表, key为主题名称, value为订阅对象
 
 	// 发送队列 (改用之前的 LockedRingBuffer 性能更好)
-	queue     *ksync.LockedRingBuffer[*NatsMessage]
+	queue     *ksync.LockedRingBuffer[NatsMessage]
 	queueSize uint
 
 	logf klog.AppLogFuncWithTag
@@ -42,7 +42,7 @@ func NewNatsCoreClient(ctx *kcontext.ContextNode, queueSize uint, conf *NatsClie
 		return nil, fmt.Errorf("NatsClientConfig.CoreNats is nil")
 	}
 
-	queue, err := ksync.NewLockedRingBuffer[*NatsMessage](uint64(queueSize))
+	queue, err := ksync.NewLockedRingBuffer[NatsMessage](uint64(queueSize))
 	if err != nil {
 		if logf != nil {
 			logf(klog.ErrorLevel, NatsLogTag, 0, "Create natsmq queue failed: %s", err.Error())
@@ -143,7 +143,7 @@ func (that *NatsCoreClient) Close() {
 }
 
 func (that *NatsCoreClient) PublishMessage(topic string, message string) bool {
-	msg := &NatsMessage{
+	msg := NatsMessage{
 		Topic:   topic,
 		Payload: []byte(message),
 	}
@@ -151,7 +151,7 @@ func (that *NatsCoreClient) PublishMessage(topic string, message string) bool {
 }
 
 // Publish 业务层异步发送入口
-func (that *NatsCoreClient) Publish(msg *NatsMessage) bool {
+func (that *NatsCoreClient) Publish(msg NatsMessage) bool {
 	if that.draining.Load() || that.conn == nil {
 		return false
 	}
@@ -242,7 +242,7 @@ func (that *NatsCoreClient) startDrainPipe() {
 	go func() {
 		defer that.wg.Done()
 
-		buffer := make([]*NatsMessage, that.queueSize)
+		buffer := make([]NatsMessage, that.queueSize)
 		for {
 			n := that.queue.DequeueTo(buffer)
 			if n <= 0 {
@@ -304,7 +304,7 @@ func (that *NatsCoreClient) syncSubscriptions() error {
 	handler := coreConf.MainHandler() // 假设配置中有此 handler
 	natsHandler := func(msg *nats.Msg) {
 		if handler != nil {
-			handler(that, &NatsMessage{Topic: msg.Subject, Reply: msg.Reply, Header: msg.Header, Payload: msg.Data})
+			handler(that, NatsMessage{Topic: msg.Subject, Reply: msg.Reply, Header: msg.Header, Payload: msg.Data})
 		}
 	}
 

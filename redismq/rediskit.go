@@ -66,7 +66,7 @@ func (that *ClientHandlerWrapper) Publish(topic string, message any) error {
 	return ErrWrapError
 }
 
-func (that *ClientHandlerWrapper) PublishArray(messages []*kredis.RedisMessage) []error {
+func (that *ClientHandlerWrapper) PublishArray(messages []kredis.RedisMessage) []error {
 	if that.Client != nil {
 		return that.Client.PublishArray(messages)
 	}
@@ -144,7 +144,7 @@ func (that *RedisToolkit) SyncPSubscribeReceive(callback func(err error, topic s
 }
 
 // PublishArray 发布Redis主题, 并将数组转换为JSON字符串
-func (that *RedisToolkit) PublishArray(messages []*kredis.RedisMessage) []error {
+func (that *RedisToolkit) PublishArray(messages []kredis.RedisMessage) []error {
 	if len(that.conf.Addrs) == 0 {
 		that.log(klog.ErrorLevel, "%v", ErrEmptyAddrs)
 		return []error{ErrEmptyAddrs}

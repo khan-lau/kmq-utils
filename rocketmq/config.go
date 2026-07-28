@@ -18,7 +18,7 @@ const (
 )
 
 // ///////////////////////////////////////////////////////////
-type MessageHandler func(voidObj any, msg *Message)
+type MessageHandler func(voidObj any, msg Message)
 type ErrorCallbackFunc func(err error)
 type EventCallbackFunc func(event any)
 type ReadyCallbackFunc func(ready bool)

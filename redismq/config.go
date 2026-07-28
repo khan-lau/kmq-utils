@@ -20,7 +20,7 @@ var (
 type ErrorCallbackFunc func(err error)
 type EventCallbackFunc func(event any)
 type ReadyCallbackFunc func(ready bool)
-type MessageHandler func(voidObj any, msg *kredis.RedisMessage)
+type MessageHandler func(voidObj any, msg kredis.RedisMessage)
 
 /////////////////////////////////////////////////////////////
 

@@ -8,7 +8,7 @@ import (
 	"github.com/khan-lau/kutils/container/klists"
 )
 
-type MessageHandler func(voidObj any, msg *KafkaMessage)
+type MessageHandler func(voidObj any, msg KafkaMessage)
 
 const (
 	//  OffsetNewest 表示分区的头部偏移量, 也就是将要被分配给下一条将要生产到该分区的消息的偏移量.

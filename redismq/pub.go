@@ -21,11 +21,11 @@ type RedisPub struct {
 	ctx          *kcontext.ContextNode
 	redisHandler *RedisToolkit
 
-	started    atomic.Bool                                   // 是否已经启动过（防止重复启动 goroutine）
-	draining   atomic.Bool                                   // 正在关闭中, true 表示正在关闭中, false 表示正常运行中, 默认为false
-	connected  atomic.Bool                                   // 是否已连接, true 表示已连接, false 表示未连接
-	queue      *ksync.LockedRingBuffer[*kredis.RedisMessage] // 消息队列
-	bufferSize uint                                          // 缓冲区大小
+	started    atomic.Bool                                  // 是否已经启动过（防止重复启动 goroutine）
+	draining   atomic.Bool                                  // 正在关闭中, true 表示正在关闭中, false 表示正常运行中, 默认为false
+	connected  atomic.Bool                                  // 是否已连接, true 表示已连接, false 表示未连接
+	queue      *ksync.LockedRingBuffer[kredis.RedisMessage] // 消息队列
+	bufferSize uint                                         // 缓冲区大小
 	wg         sync.WaitGroup
 	conf       *RedisConfig
 	logf       klog.AppLogFuncWithTag
@@ -44,7 +44,7 @@ func NewRedisPub(ctx *kcontext.ContextNode, queueSize uint, conf *RedisConfig, l
 	// redisHD := kredis.NewKRedis(subCtx, conf.Addrs[0], "", conf.Password, conf.DB)
 	redisHD := NewRedisToolkit(subCtx, conf, logf)
 
-	queue, err := ksync.NewLockedRingBuffer[*kredis.RedisMessage](uint64(queueSize))
+	queue, err := ksync.NewLockedRingBuffer[kredis.RedisMessage](uint64(queueSize))
 	if err != nil {
 		if logf != nil {
 			logf(klog.ErrorLevel, RedisLogTag, 0, "Create redisPub queue failed: %s", err.Error())
@@ -86,7 +86,7 @@ func (that *RedisPub) Start() {
 }
 
 func (that *RedisPub) PublishMessage(topic string, message string) bool {
-	msg := &kredis.RedisMessage{
+	msg := kredis.RedisMessage{
 		Topic:   topic,
 		Message: message,
 	}
@@ -111,7 +111,7 @@ func (that *RedisPub) Close() {
 	that.log(klog.InfoLevel, "Client stopped")
 }
 
-func (that *RedisPub) Publish(msg *kredis.RedisMessage) bool {
+func (that *RedisPub) Publish(msg kredis.RedisMessage) bool {
 	if that.draining.Load() {
 		that.log(klog.WarnLevel, "in draining mode, publish rejected: %s", msg.Topic)
 		return false
@@ -202,7 +202,7 @@ func (that *RedisPub) startPublish() {
 	defer that.wg.Done() // 退出时通知完成
 
 	batchSize := max(int(that.bufferSize/4), DefaultBatchSize)
-	batchArray := make([]*kredis.RedisMessage, batchSize)
+	batchArray := make([]kredis.RedisMessage, batchSize)
 	for {
 		if that.draining.Load() { // 正在关闭中，退出循环
 			// 处理完剩余队列后，再退出循环
@@ -241,7 +241,7 @@ func (that *RedisPub) startPublish() {
 	}
 }
 
-func (that *RedisPub) PublishArray(messages []*kredis.RedisMessage) {
+func (that *RedisPub) PublishArray(messages []kredis.RedisMessage) {
 	if len(messages) == 0 {
 		return
 	}

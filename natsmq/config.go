@@ -18,7 +18,7 @@ const (
 	AUTO_COMMIT_NONE = "none" // 手动提交
 )
 
-type MessageHandler func(voidObj any, msg *NatsMessage) // 消息处理回调函数
+type MessageHandler func(voidObj any, msg NatsMessage) // 消息处理回调函数
 
 type ErrorCallbackFunc func(err error)
 type EventCallbackFunc func(event any)

@@ -33,7 +33,7 @@ var (
 /////////////////////////////////////////////////////////////
 
 type RabbitWorkType uint8
-type MessageHandler func(voidObj any, msg *Message)
+type MessageHandler func(voidObj any, msg Message)
 
 type ErrorCallbackFunc func(err error)
 type EventCallbackFunc func(event any)

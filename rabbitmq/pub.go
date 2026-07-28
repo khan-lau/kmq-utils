@@ -22,8 +22,8 @@ type Producer struct {
 	started  atomic.Bool // 启动状态管理
 	draining atomic.Bool // 排水状态管理
 
-	queue     *ksync.LockedRingBuffer[*RabbitMessage] // 消息队列
-	queueSize uint                                    // 消息通道大小
+	queue     *ksync.LockedRingBuffer[RabbitMessage] // 消息队列
+	queueSize uint                                   // 消息通道大小
 
 	logf klog.AppLogFuncWithTag
 	wg   sync.WaitGroup // 用于同步 Close
@@ -31,7 +31,7 @@ type Producer struct {
 
 func NewProducer(ctx *kcontext.ContextNode, queueSize uint, conf *RabbitConfig, logf klog.AppLogFuncWithTag) (*Producer, error) {
 	// 1. 初始化本地环形缓冲区
-	queue, err := ksync.NewLockedRingBuffer[*RabbitMessage](uint64(queueSize))
+	queue, err := ksync.NewLockedRingBuffer[RabbitMessage](uint64(queueSize))
 	if err != nil {
 		if logf != nil {
 			logf(klog.ErrorLevel, RabbitLogTag, 0, "Create rabbit publish queue failed: %s", err.Error())
@@ -94,7 +94,7 @@ func (that *Producer) Start() {
 	go func() {
 		defer that.wg.Done()
 
-		buffer := make([]*RabbitMessage, that.queueSize)
+		buffer := make([]RabbitMessage, that.queueSize)
 		for {
 			// 排水核心：DequeueTo 在 queue.Close() 且数据空后返回 0
 			n := that.queue.DequeueTo(buffer)
@@ -169,7 +169,7 @@ func (that *Producer) Close() {
 	that.ctx.Remove()
 }
 
-func (that *Producer) Publish(msg *RabbitMessage) bool {
+func (that *Producer) Publish(msg RabbitMessage) bool {
 	if that != nil && that.queue != nil {
 		return that.queue.Enqueue(msg)
 	}
@@ -177,7 +177,7 @@ func (that *Producer) Publish(msg *RabbitMessage) bool {
 }
 
 func (that *Producer) PublishMessage(exchange string, router string, message string) bool {
-	msg := &RabbitMessage{
+	msg := RabbitMessage{
 		Exchange: exchange,
 		Router:   []string{router},
 		Body:     []byte(message),
@@ -185,7 +185,7 @@ func (that *Producer) PublishMessage(exchange string, router string, message str
 	return that.Publish(msg)
 }
 
-func (that *Producer) publish(msg *RabbitMessage) error {
+func (that *Producer) publish(msg RabbitMessage) error {
 	// 即使主 context 取消了，排水期间我们也给每条消息一点点宽限时间
 	ctx, cancel := context.WithTimeout(context.Background(), 5000*time.Millisecond)
 	defer cancel()

@@ -18,7 +18,7 @@ var (
 	ErrNoCAProvided = errors.New("No CA cert provided")
 )
 
-type MessageHandler func(voidObj any, msg *MqttMessage)       // 消息处理回调函数
+type MessageHandler func(voidObj any, msg MqttMessage)        // 消息处理回调函数
 type OnAuthedCallback func(client *MqttClient, isAuthed bool) // 认证回调函数
 type ReadyCallbackFunc func(ready bool)                       // 启动完成回调函数
 

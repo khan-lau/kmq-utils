@@ -19,9 +19,9 @@ type ConsumerGroup struct {
 	conf       *Config
 	group      sarama.ConsumerGroup
 	brokerList []string
-	topics     []*Topic                               // 每个 topic 及其偏移量
-	queue      *ksync.LockedRingBuffer[*KafkaMessage] // 消息队列
-	bufferSize uint                                   // 缓冲区大小
+	topics     []*Topic                              // 每个 topic 及其偏移量
+	queue      *ksync.LockedRingBuffer[KafkaMessage] // 消息队列
+	bufferSize uint                                  // 缓冲区大小
 	logf       klog.AppLogFuncWithTag
 
 	wg sync.WaitGroup // 用于同步 Close
@@ -99,7 +99,7 @@ func NewConsumerGroup(ctx *kcontext.ContextNode, bufferSize uint, conf *Config, 
 	topics := klists.ToKSlice(conf.Topics)
 	topics = QueryTopics(client, topics...)
 
-	queue, err := ksync.NewLockedRingBuffer[*KafkaMessage](uint64(bufferSize))
+	queue, err := ksync.NewLockedRingBuffer[KafkaMessage](uint64(bufferSize))
 	if err != nil {
 		if logf != nil {
 			logf(klog.ErrorLevel, KafkaLogTag, 0, "Create kafka subscribe queue failed: %s", err.Error())
@@ -141,7 +141,7 @@ func (that *ConsumerGroup) SyncSubscribe() {
 	}
 
 	msgHandler := that.conf.Consumer.MainHandler()
-	consumerHandler := func(voidObj any, msg *KafkaMessage) {
+	consumerHandler := func(voidObj any, msg KafkaMessage) {
 		if msgHandler != nil {
 			msgHandler(voidObj, msg)
 		}
@@ -169,7 +169,7 @@ func (that *ConsumerGroup) SyncSubscribe() {
 	subCtx := that.ctx.NewChild("kafka_group_consumer_child")
 	go func(ctx *kcontext.ContextNode) {
 		defer workerWg.Done()
-		buffer := make([]*KafkaMessage, that.bufferSize)
+		buffer := make([]KafkaMessage, that.bufferSize)
 		for {
 
 			// 使用阻塞式 DequeueTo。
@@ -269,7 +269,7 @@ func (that *ConsumerGroup) log(level klog.Level, format string, args ...any) {
 // 确保所有状态都安全地防止竞争条件。
 type privateConsumerGroupHandler struct {
 	parentCtx *kcontext.ContextNode
-	queue     *ksync.LockedRingBuffer[*KafkaMessage] // 消息队列
+	queue     *ksync.LockedRingBuffer[KafkaMessage] // 消息队列
 	topics    []*Topic
 
 	// callback   MessageHandler
@@ -327,7 +327,7 @@ func (that *privateConsumerGroupHandler) Cleanup(session sarama.ConsumerGroupSes
 // 一旦 Messages() 通道被关闭，Handler 必须完成其消息处理循环并退出。
 func (that *privateConsumerGroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for msg := range claim.Messages() {
-		kafkMsg := &KafkaMessage{Topic: msg.Topic, Partition: msg.Partition, Offset: msg.Offset, Key: msg.Key, Value: msg.Value, session: session}
+		kafkMsg := KafkaMessage{Topic: msg.Topic, Partition: msg.Partition, Offset: msg.Offset, Key: msg.Key, Value: msg.Value, session: session}
 
 		enqueued := false
 		for {

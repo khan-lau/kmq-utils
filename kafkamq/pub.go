@@ -16,8 +16,8 @@ type AsyncProducer struct {
 	brokerList []string
 	conf       *Config
 	Producer   sarama.AsyncProducer
-	queue      *ksync.LockedRingBuffer[*KafkaMessage] // 消息队列
-	queueSize  uint                                   // 消息通道大小
+	queue      *ksync.LockedRingBuffer[KafkaMessage] // 消息队列
+	queueSize  uint                                  // 消息通道大小
 	logf       klog.AppLogFuncWithTag
 
 	wg sync.WaitGroup // 用于同步 Close
@@ -83,7 +83,7 @@ func NewAsyncProducer(ctx *kcontext.ContextNode, queueSize uint, conf *Config, l
 		return nil, err
 	}
 
-	queue, err := ksync.NewLockedRingBuffer[*KafkaMessage](uint64(queueSize))
+	queue, err := ksync.NewLockedRingBuffer[KafkaMessage](uint64(queueSize))
 	if err != nil {
 		if logf != nil {
 			logf(klog.ErrorLevel, KafkaLogTag, 0, "Create kafka publish queue failed: %s", err.Error())
@@ -147,7 +147,7 @@ func (that *AsyncProducer) Start() {
 	go func(cancelFunc context.CancelFunc, wg *sync.WaitGroup) {
 		defer wg.Done()
 
-		buffer := make([]*KafkaMessage, that.queueSize)
+		buffer := make([]KafkaMessage, that.queueSize)
 		for {
 			// 退出逻辑：当 queue.Close() 被调用且数据排空后，n 会返回 0。
 			n := that.queue.DequeueTo(buffer)
@@ -179,14 +179,14 @@ func (that *AsyncProducer) Start() {
 	that.log(klog.InfoLevel, "kafka producer runloop done")
 }
 
-func (that *AsyncProducer) Publish(msg *KafkaMessage) bool {
+func (that *AsyncProducer) Publish(msg KafkaMessage) bool {
 	if that != nil && that.queue != nil {
 		return that.queue.Enqueue(msg)
 	}
 	return false
 }
 
-func (that *AsyncProducer) PublishArray(msgs []*KafkaMessage) bool {
+func (that *AsyncProducer) PublishArray(msgs []KafkaMessage) bool {
 	if that != nil && that.queue != nil {
 		n := that.queue.EnqueueBatch(msgs)
 		return n > 0
@@ -194,34 +194,34 @@ func (that *AsyncProducer) PublishArray(msgs []*KafkaMessage) bool {
 	return false
 }
 
-func (that *AsyncProducer) PublisMessage(topic, key, message string) bool {
-	msg := &KafkaMessage{
-		Topic:     topic,
-		Partition: 0,
-		Offset:    0,
-		Key:       []byte(key),
-		Value:     []byte(message),
-	}
-	return that.Publish(msg)
-}
+// func (that *AsyncProducer) PublisMessage(topic, key, message string) bool {
+// 	msg := KafkaMessage{
+// 		Topic:     topic,
+// 		Partition: 0,
+// 		Offset:    0,
+// 		Key:       []byte(key),
+// 		Value:     []byte(message),
+// 	}
+// 	return that.Publish(msg)
+// }
 
-func (that *AsyncProducer) PublishData(partition int32, topic, key string, value []byte) bool {
-	msg := &KafkaMessage{
-		Topic:     topic,
-		Partition: partition,
-		Offset:    0,
-		Key:       []byte(key),
-		Value:     value,
-	}
-	return that.Publish(msg)
-}
+// func (that *AsyncProducer) PublishData(partition int32, topic, key string, value []byte) bool {
+// 	msg := KafkaMessage{
+// 		Topic:     topic,
+// 		Partition: partition,
+// 		Offset:    0,
+// 		Key:       []byte(key),
+// 		Value:     value,
+// 	}
+// 	return that.Publish(msg)
+// }
 
-func (that *AsyncProducer) PublishDataWithProperties(partition int32, topic, key string, value []byte, properties map[string]string) bool {
+func (that *AsyncProducer) PublishDataWithProperties(partition int32, topic string, key string, value []byte, properties map[string]string) bool {
 	headers := make([]sarama.RecordHeader, 0, len(properties))
 	for k, v := range properties {
 		headers = append(headers, sarama.RecordHeader{Key: []byte(k), Value: []byte(v)})
 	}
-	msg := &KafkaMessage{
+	msg := KafkaMessage{
 		Topic:     topic,
 		Partition: partition,
 		Offset:    0,

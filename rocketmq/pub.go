@@ -17,10 +17,10 @@ import (
 type Producer struct {
 	ctx        *kcontext.ContextNode
 	mqProducer rocket.Producer
-	started    atomic.Bool                             // 启动状态管理
-	draining   atomic.Bool                             // 排水状态管理
-	queue      *ksync.LockedRingBuffer[*RocketMessage] // 消息队列
-	queueSize  uint                                    // 消息通道大小
+	started    atomic.Bool                            // 启动状态管理
+	draining   atomic.Bool                            // 排水状态管理
+	queue      *ksync.LockedRingBuffer[RocketMessage] // 消息队列
+	queueSize  uint                                   // 消息通道大小
 	conf       *RocketConfig
 	logf       klog.AppLogFuncWithTag
 	wg         sync.WaitGroup // 用于等待 彻底完成排水
@@ -71,7 +71,7 @@ func NewProducer(ctx *kcontext.ContextNode, queueSize uint, conf *RocketConfig, 
 
 	opts = append(opts, retryOption, timeoutOption, queueOption, interceptorOption)
 
-	queue, err := ksync.NewLockedRingBuffer[*RocketMessage](uint64(queueSize))
+	queue, err := ksync.NewLockedRingBuffer[RocketMessage](uint64(queueSize))
 	if err != nil {
 		if logf != nil {
 			logf(klog.ErrorLevel, RocketLogTag, 0, "Create rocketmq publish queue failed: %s", err.Error())
@@ -129,7 +129,7 @@ func (that *Producer) Start() {
 		}
 	}()
 
-	buffer := make([]*RocketMessage, that.queueSize)
+	buffer := make([]RocketMessage, that.queueSize)
 	for {
 		// 排水核心：DequeueTo 在 queue.Close() 且数据空后返回 0
 		n := that.queue.DequeueTo(buffer)
@@ -202,7 +202,7 @@ func (that *Producer) Close() {
 
 //////////////////////////////////////////////////////////////
 
-func (that *Producer) Publish(msg *RocketMessage) bool {
+func (that *Producer) Publish(msg RocketMessage) bool {
 	if that != nil && that.queue != nil {
 		return that.queue.Enqueue(msg)
 	}
@@ -210,7 +210,7 @@ func (that *Producer) Publish(msg *RocketMessage) bool {
 }
 
 func (that *Producer) PublishMessage(topic string, message []byte) bool {
-	msg := &RocketMessage{
+	msg := RocketMessage{
 		Topic:   topic,
 		Message: message,
 	}
@@ -218,7 +218,7 @@ func (that *Producer) PublishMessage(topic string, message []byte) bool {
 }
 
 func (that *Producer) PublishData(topic string, message []byte, properties map[string]string) bool {
-	msg := &RocketMessage{
+	msg := RocketMessage{
 		Topic:      topic,
 		Message:    message,
 		Properties: properties,
@@ -226,7 +226,7 @@ func (that *Producer) PublishData(topic string, message []byte, properties map[s
 	return that.Publish(msg)
 }
 
-func (that *Producer) drainPublish(msg *RocketMessage) error {
+func (that *Producer) drainPublish(msg RocketMessage) error {
 	mqMessage := primitive.NewMessage(msg.Topic, msg.Message)
 	if msg.Properties != nil {
 		mqMessage.WithProperties(msg.Properties)
@@ -242,7 +242,7 @@ func (that *Producer) drainPublish(msg *RocketMessage) error {
 	return err
 }
 
-func (that *Producer) publish(msg *RocketMessage) error {
+func (that *Producer) publish(msg RocketMessage) error {
 	mqMessage := primitive.NewMessage(msg.Topic, msg.Message)
 	if msg.Properties != nil {
 		mqMessage.WithProperties(msg.Properties)

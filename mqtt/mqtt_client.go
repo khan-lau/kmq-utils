@@ -30,8 +30,8 @@ type MqttClient struct {
 	readyOnce sync.Once      // 保证 OnReady 仅触发一次
 	wg        sync.WaitGroup // ksync.CountDownLatch
 
-	queue     *ksync.LockedRingBuffer[*MqttMessage] // 消息通道，用于接收订阅的消息
-	queueSize uint                                  // 消息通道大小
+	queue     *ksync.LockedRingBuffer[MqttMessage] // 消息通道，用于接收订阅的消息
+	queueSize uint                                 // 消息通道大小
 	logf      klog.AppLogFuncWithTag
 }
 
@@ -40,7 +40,7 @@ func NewMqttClient(ctx *kcontext.ContextNode, queueSize uint, conf *Config, logf
 		return nil, fmt.Errorf("mqtt tls ca cert path: %s not exists", conf.CaCertPath())
 	}
 
-	queue, err := ksync.NewLockedRingBuffer[*MqttMessage](uint64(queueSize))
+	queue, err := ksync.NewLockedRingBuffer[MqttMessage](uint64(queueSize))
 	if err != nil {
 		if logf != nil {
 			logf(klog.ErrorLevel, MqttLogTag, 0, "Create mqtt queue failed: %s", err.Error())
@@ -190,20 +190,20 @@ func (that *MqttClient) Close() {
 }
 
 // Publish 业务层异步发送入口
-func (that *MqttClient) Publish(msg *MqttMessage) bool {
+func (that *MqttClient) Publish(msg MqttMessage) bool {
 	if that.draining.Load() || that.client == nil {
 		return false
 	}
 	return that.queue.Enqueue(msg)
 }
 
-func (that *MqttClient) PublishMessage(topic string, message string) bool {
-	msg := &MqttMessage{
+func (that *MqttClient) PublishMessage(topic string, message []byte) bool {
+	msg := MqttMessage{
 		Topic:     topic,
 		Duplicate: false,
 		Retained:  true,
 		Qos:       that.conf.Qos(),
-		Payload:   []byte(message),
+		Payload:   message,
 	}
 	return that.Publish(msg)
 }
@@ -225,7 +225,7 @@ func (that *MqttClient) syncSubscriptions() {
 	handler := that.conf.MainHandler()
 	pahoHandler := func(c paho.Client, msg paho.Message) {
 		if handler != nil {
-			handler(c, &MqttMessage{
+			handler(c, MqttMessage{
 				Topic:     msg.Topic(),
 				Payload:   msg.Payload(),
 				Qos:       msg.Qos(),
@@ -250,7 +250,7 @@ func (that *MqttClient) startDrainPipe() {
 	that.wg.Add(1)
 	go func() {
 		defer that.wg.Done()
-		buffer := make([]*MqttMessage, that.queueSize)
+		buffer := make([]MqttMessage, that.queueSize)
 		for {
 			n := that.queue.DequeueTo(buffer)
 			if n <= 0 { // 队列已 Close 且数据排干

@@ -84,7 +84,7 @@ func (that *Consumer) SyncSubscribe() {
 	defer that.wg.Done()
 
 	handler := that.conf.Consumer.MainHandler()
-	msgHandler := func(voidObj any, msg *Message) {
+	msgHandler := func(voidObj any, msg Message) {
 		if handler != nil {
 			handler(voidObj, msg)
 		}
@@ -103,7 +103,7 @@ func (that *Consumer) SyncSubscribe() {
 			return rabbitmq.NackRequeue
 		}
 
-		msgHandler(that, &Message{Delivery: &delivery})
+		msgHandler(that, Message{Delivery: &delivery})
 
 		// rabbitmq.Ack, 成功处理消息，从队列中移除。
 		// rabbitmq.NackDiscard, 失败处理，但错误是永久性的，所以直接丢弃消息。

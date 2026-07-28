@@ -23,9 +23,9 @@ import (
 type PushConsumer struct {
 	ctx        *kcontext.ContextNode
 	mqConsumer rocket.PushConsumer
-	draining   atomic.Bool                       // 正在关闭中, true 表示正在关闭中, false 表示正常运行中, 默认为false
-	queue      *ksync.LockedRingBuffer[*Message] // 消息队列
-	chanSize   uint                              // 消息通道大小
+	draining   atomic.Bool                      // 正在关闭中, true 表示正在关闭中, false 表示正常运行中, 默认为false
+	queue      *ksync.LockedRingBuffer[Message] // 消息队列
+	chanSize   uint                             // 消息通道大小
 	conf       *RocketConfig
 	logf       klog.AppLogFuncWithTag
 	wg         sync.WaitGroup // 用于等待 SyncSubscribe 彻底完成排水
@@ -94,7 +94,7 @@ func NewPushConsumer(ctx *kcontext.ContextNode, chanSize uint, conf *RocketConfi
 		return nil, err
 	}
 
-	queue, err := ksync.NewLockedRingBuffer[*Message](uint64(chanSize))
+	queue, err := ksync.NewLockedRingBuffer[Message](uint64(chanSize))
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +122,7 @@ func NewPushConsumer(ctx *kcontext.ContextNode, chanSize uint, conf *RocketConfi
 				}
 
 				for _, msg := range msgs {
-					_ = tConsumer.queue.Enqueue(&Message{MessageExt: msg, consumer: nil})
+					_ = tConsumer.queue.Enqueue(Message{MessageExt: msg, consumer: nil})
 				}
 
 				// consumer.ConsumeSuccess 消费完成
@@ -154,7 +154,7 @@ func (that *PushConsumer) SyncSubscribe() {
 	defer that.wg.Done()
 
 	handler := that.conf.Consumer.MainHandler()
-	msgHandler := func(voidObj any, msg *Message) {
+	msgHandler := func(voidObj any, msg Message) {
 		if handler != nil {
 			handler(voidObj, msg)
 		}
@@ -196,7 +196,7 @@ END_LOOP:
 	// 只有在 Start 成功且收到退出信号时才会走到这里
 	that.log(klog.InfoLevel, "Draining remaining %s messages...", remainLen)
 
-	remainMsgs := make([]*Message, remainLen)
+	remainMsgs := make([]Message, remainLen)
 	that.queue.DequeueToWait(remainMsgs, 5000*time.Millisecond)
 
 	for _, msg := range remainMsgs {
@@ -250,10 +250,10 @@ func (that *PushConsumer) log(level klog.Level, format string, args ...any) {
 type PullConsumer struct {
 	ctx        *kcontext.ContextNode
 	mqConsumer rocket.PullConsumer
-	draining   atomic.Bool                       // 正在关闭中, true 表示正在关闭中, false 表示正常运行中, 默认为false
-	queue      *ksync.LockedRingBuffer[*Message] // 消息队列
-	chanSize   uint                              // 消息通道大小
-	pullSize   uint                              // 一次拉取的最大消息数量, 不得超过 0x0FFFFFFF 条
+	draining   atomic.Bool                      // 正在关闭中, true 表示正在关闭中, false 表示正常运行中, 默认为false
+	queue      *ksync.LockedRingBuffer[Message] // 消息队列
+	chanSize   uint                             // 消息通道大小
+	pullSize   uint                             // 一次拉取的最大消息数量, 不得超过 0x0FFFFFFF 条
 	conf       *RocketConfig
 	logf       klog.AppLogFuncWithTag
 	wg         sync.WaitGroup // 用于等待 SyncSubscribe 彻底完成排水
@@ -322,7 +322,7 @@ func NewPullConsumer(ctx *kcontext.ContextNode, chanSize uint, conf *RocketConfi
 	if err != nil {
 		return nil, err
 	}
-	queue, err := ksync.NewLockedRingBuffer[*Message](uint64(chanSize))
+	queue, err := ksync.NewLockedRingBuffer[Message](uint64(chanSize))
 	if err != nil {
 		return nil, err
 	}
@@ -380,7 +380,7 @@ func NewPullConsumer(ctx *kcontext.ContextNode, chanSize uint, conf *RocketConfi
 	return tConsumer, nil
 }
 
-func (that *PullConsumer) pull(ctx *kcontext.ContextNode, maxSize int) ([]*Message, error) {
+func (that *PullConsumer) pull(ctx *kcontext.ContextNode, maxSize int) ([]Message, error) {
 	uuid1, _ := kuuid.NewV1()
 	substr := uuid1.ShortString()
 	subCtx := ctx.NewChild("rocketmq_pull_consumer_" + substr)
@@ -394,16 +394,16 @@ func (that *PullConsumer) pull(ctx *kcontext.ContextNode, maxSize int) ([]*Messa
 		return nil, err
 	}
 
-	msgs := make([]*Message, 0, len(resp.GetMessages()))
+	msgs := make([]Message, 0, len(resp.GetMessages()))
 	switch resp.Status {
 	case primitive.PullFound:
 		// var queue *primitive.MessageQueue
 		if len(resp.GetMessages()) <= 0 {
-			return []*Message{}, nil
+			return []Message{}, nil
 		}
 		for _, msg := range resp.GetMessageExts() {
 			// queue = msg.Queue
-			msgs = append(msgs, &Message{MessageExt: msg, consumer: that})
+			msgs = append(msgs, Message{MessageExt: msg, consumer: that})
 		}
 		// // UpdateOffset更新本地内存中的offset, 还需要PersistOffset持久化到队列
 		// err = that.mqConsumer.UpdateOffset(queue, resp.NextBeginOffset)
@@ -415,17 +415,17 @@ func (that *PullConsumer) pull(ctx *kcontext.ContextNode, maxSize int) ([]*Messa
 		// 没有新数据, 或者没有匹配的消息
 		time.Sleep(500 * time.Millisecond)
 		// return nil, fmt.Errorf("no pull message, next: %s", resp.NextBeginOffset)
-		return []*Message{}, nil
+		return []Message{}, nil
 	case primitive.PullBrokerTimeout:
 		// 网络超时, 延迟重试
 		time.Sleep(500 * time.Millisecond)
 		// return nil, fmt.Errorf("pull broker timeout, next: %s", resp.NextBeginOffset)
-		return []*Message{}, nil
+		return []Message{}, nil
 	case primitive.PullOffsetIllegal:
 		// 拉取的offset不合法, 延迟重试
 		time.Sleep(500 * time.Millisecond)
 		// return nil, fmt.Errorf("pull offset illegal, next: %s", resp.NextBeginOffset)
-		return []*Message{}, nil
+		return []Message{}, nil
 	default:
 		return nil, fmt.Errorf("pull error: %v", resp.Status)
 	}
@@ -442,7 +442,7 @@ func (that *PullConsumer) SyncSubscribe() {
 	defer that.wg.Done()
 
 	handler := that.conf.Consumer.MainHandler()
-	msgHandler := func(voidObj any, msg *Message) {
+	msgHandler := func(voidObj any, msg Message) {
 		if handler != nil {
 			handler(voidObj, msg)
 		}
@@ -478,7 +478,7 @@ END_LOOP:
 	// 只有在 Start 成功且收到退出信号时才会走到这里
 	that.log(klog.InfoLevel, "Draining remaining %s messages...", remainLen)
 
-	remainMsgs := make([]*Message, remainLen)
+	remainMsgs := make([]Message, remainLen)
 	that.queue.DequeueToWait(remainMsgs, 5000*time.Millisecond)
 
 	for _, msg := range remainMsgs {
@@ -529,7 +529,7 @@ func (that *PullConsumer) Close() {
 //////////////////////////////////////////////////////////////
 
 // 提取公共处理函数
-func (that *PullConsumer) handleMsg(msg *Message, callback MessageHandler) {
+func (that *PullConsumer) handleMsg(msg Message, callback MessageHandler) {
 	if callback != nil {
 		callback(that, msg)
 		// if that.conf.Consumer.AutoCommit == AUTO_COMMIT_CUSTOM {

@@ -178,7 +178,7 @@ func (that *RedisSub) startSubscription() {
 	defer that.wg.Done()
 
 	handler := that.conf.MainHandler()
-	msgHandler := func(voidObj any, msg *kredis.RedisMessage) {
+	msgHandler := func(voidObj any, msg kredis.RedisMessage) {
 		if nil != handler {
 			handler(voidObj, msg)
 		}
@@ -192,25 +192,22 @@ func (that *RedisSub) startSubscription() {
 			if err != nil {
 				that.onError(err)
 			} else {
-				msg, err := that.receivedMessage(topic, payload)
-				if nil != err {
-					that.log(klog.WarnLevel, "Subscribe reids topic error: %v", err)
-				} else {
+				if s, ok := payload.(string); ok {
+					msg := kredis.RedisMessage{Topic: topic, Message: s}
 					msgHandler(that, msg)
+				} else {
+					that.log(klog.WarnLevel, "Subscribe reids topic error: payload data type unknown, %v", payload)
 				}
+				// // msg, err := that.receivedMessage(topic, payload)
+				// if nil != err {
+				// 	that.log(klog.WarnLevel, "Subscribe reids topic error: %v", err)
+				// } else {
+				// 	msgHandler(that, msg)
+				// }
 			}
 
 		}, that.conf.Topics...,
 	)
-}
-
-func (that *RedisSub) receivedMessage(topic string, payload any) (*kredis.RedisMessage, error) {
-	s, ok := payload.(string)
-	if ok {
-		return &kredis.RedisMessage{Topic: topic, Message: s}, nil
-	} else {
-		return nil, fmt.Errorf("payload data type unknown")
-	}
 }
 
 // log 日志记录, 会自动添加 RedisLogTag

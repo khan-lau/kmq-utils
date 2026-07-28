@@ -36,7 +36,7 @@ type NatsJetStreamClient struct {
 	timestamp int64 // 上次消费纳秒时间戳，用于断点续传
 
 	// 发送队列 (与 CoreClient 对齐)
-	queue     *ksync.LockedRingBuffer[*NatsMessage]
+	queue     *ksync.LockedRingBuffer[NatsMessage]
 	queueSize uint
 
 	logf klog.AppLogFuncWithTag
@@ -47,7 +47,7 @@ func NewNatsJetStreamClient(ctx *kcontext.ContextNode, queueSize uint, timestamp
 		return nil, fmt.Errorf("NatsClientConfig.JetStream is nil")
 	}
 
-	queue, err := ksync.NewLockedRingBuffer[*NatsMessage](uint64(queueSize))
+	queue, err := ksync.NewLockedRingBuffer[NatsMessage](uint64(queueSize))
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +148,7 @@ func (that *NatsJetStreamClient) Close() {
 }
 
 func (that *NatsJetStreamClient) PublishMessage(topic string, message string) bool {
-	msg := &NatsMessage{
+	msg := NatsMessage{
 		Topic:   topic,
 		Payload: []byte(message),
 	}
@@ -156,7 +156,7 @@ func (that *NatsJetStreamClient) PublishMessage(topic string, message string) bo
 }
 
 // Publish 业务层异步发送入口
-func (that *NatsJetStreamClient) Publish(msg *NatsMessage) bool {
+func (that *NatsJetStreamClient) Publish(msg NatsMessage) bool {
 	if that.draining.Load() || that.conn == nil {
 		return false
 	}
@@ -261,7 +261,7 @@ func (that *NatsJetStreamClient) startDrainPipe() {
 	go func() {
 		defer that.wg.Done()
 
-		buffer := make([]*NatsMessage, that.queueSize)
+		buffer := make([]NatsMessage, that.queueSize)
 		for {
 			n := that.queue.DequeueTo(buffer)
 			if n <= 0 {
@@ -333,7 +333,7 @@ func (that *NatsJetStreamClient) syncSubscriptions() error {
 				that.log(klog.WarnLevel, "Failed to get message metadata: %v", err)
 				return
 			}
-			handler(that, &NatsMessage{Seq: meta.Timestamp.UnixNano(), Topic: msg.Subject, Reply: msg.Reply, Header: msg.Header, Payload: msg.Data, origin: msg})
+			handler(that, NatsMessage{Seq: meta.Timestamp.UnixNano(), Topic: msg.Subject, Reply: msg.Reply, Header: msg.Header, Payload: msg.Data, origin: msg})
 		}
 
 		// if that.conf.jetStream.consumer != nil && (that.conf.jetStream.consumer.AutoCommit() == AUTO_COMMIT_NATIVE || that.conf.jetStream.consumer.AutoCommit() == AUTO_COMMIT_CUSTOM) {
@@ -456,7 +456,7 @@ func (that *NatsJetStreamClient) upsertConsumer(js nats.JetStreamContext) (*nats
 	return consumer, nil
 }
 
-func (that *NatsJetStreamClient) publishData(msg *NatsMessage, msgId string) error {
+func (that *NatsJetStreamClient) publishData(msg NatsMessage, msgId string) error {
 	msgWithKey := nats.NewMsg(msg.Topic)
 	msgWithKey.Reply = msg.Reply
 	msgWithKey.Data = msg.Payload

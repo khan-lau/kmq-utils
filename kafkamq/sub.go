@@ -1,6 +1,7 @@
 package kafkamq
 
 import (
+	"fmt"
 	"slices"
 	"sync"
 	"time"
@@ -28,6 +29,13 @@ type ConsumerGroup struct {
 }
 
 func NewConsumerGroup(ctx *kcontext.ContextNode, bufferSize uint, conf *Config, logf klog.AppLogFuncWithTag) (*ConsumerGroup, error) {
+	// 开启 sarama 协议级日志, 用于排查连接/心跳/协调类问题, 通过适配器接入 kmq 日志框架
+	// Logger: 普通日志; DebugLogger: 更详细的调试日志 (coordinator 发现/心跳/元数据刷新等)
+	if conf.SaramaLog {
+		sarama.Logger = &saramaLogAdapter{tag: "saramaStd", logf: logf}
+		sarama.DebugLogger = &saramaLogAdapter{tag: "saramaDebug", logf: logf}
+	}
+
 	config := sarama.NewConfig()
 	// 设置config
 	config.Version = conf.Version                     // 设置协议版本
@@ -387,5 +395,41 @@ func (that *privateConsumerGroupHandler) isParentCtxDone() bool {
 func (that *privateConsumerGroupHandler) log(level klog.Level, format string, args ...any) {
 	if that.logf != nil {
 		that.logf(level, KafkaGroupHandlerLogTag, 1, format, args...)
+	}
+}
+
+/////////////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////////////
+
+const saramaLogAdapterTag = "sarama"
+
+// saramaLogAdapter 将 sarama 库的协议级日志重定向到 kmq 的 zap 日志框架
+//
+// sarama.Logger 是 StdLogger 接口 (Print/Printf/Println), 通过该适配器将
+// sarama 的日志统一接入 kmq 日志框架, 便于按 tag 过滤和统一格式输出
+type saramaLogAdapter struct {
+	tag  string
+	logf klog.AppLogFuncWithTag
+}
+
+func (that *saramaLogAdapter) Print(v ...any) {
+	that.log(klog.DebugLevel, "%s", fmt.Sprint(v...))
+}
+
+func (that *saramaLogAdapter) Printf(format string, v ...any) {
+	that.log(klog.DebugLevel, format, v...)
+}
+
+func (that *saramaLogAdapter) Println(v ...any) {
+	that.log(klog.DebugLevel, "%s", fmt.Sprint(v...))
+}
+
+// log 日志记录, 会自动添加 KafkaGroupHandlerLogTag
+//
+//go:inline
+func (that *saramaLogAdapter) log(level klog.Level, format string, args ...any) {
+	if that.logf != nil {
+		that.logf(level, saramaLogAdapterTag, 2, that.tag+" - "+format, args...)
 	}
 }

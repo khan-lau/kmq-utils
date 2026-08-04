@@ -220,7 +220,7 @@ func NewKafkaConsumerConfig() *ConsumerConfig {
 		Assignor:           "range",
 		HeartbeatInterval:  5000 * time.Millisecond,
 		RebalanceTimeout:   60000 * time.Millisecond,
-		SessionTimeout:     10000 * time.Millisecond,
+		SessionTimeout:     240000 * time.Millisecond,
 	}
 }
 
@@ -462,6 +462,8 @@ type Config struct {
 	Consumer          *ConsumerConfig // 设置消费配置
 	Producer          *ProducerConfig // 设置生产配置
 
+	SaramaLog bool // 是否输出 sarama 协议级日志(调试用, 会打印大量连接/心跳/协调请求明细)
+
 	OnError ErrorCallbackFunc // 设置错误回调
 	OnExit  EventCallbackFunc // 设置退出回调
 	OnReady ReadyCallbackFunc // 设置启动完成回调
@@ -498,6 +500,13 @@ func (that *Config) SetClientID(id string) *Config {
 	that.ClientId = id
 	return that
 }
+
+// 开启 sarama 协议级日志输出(调试用)
+func (that *Config) SetSaramaLog(enable bool) *Config {
+	that.SaramaLog = enable
+	return that
+}
+
 func (that *Config) SetGroupID(id string) *Config {
 	that.GroupID = id
 	return that

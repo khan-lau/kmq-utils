@@ -355,6 +355,11 @@ func (that *privateConsumerGroupHandler) ConsumeClaim(session sarama.ConsumerGro
 		}
 
 		session.MarkMessage(msg, "")
+
+		// if that.AutoCommit == AUTO_COMMIT_NATIVE {
+		// 	// MarkMessage 和 MarkOffset 都只允许递增偏移量，不能回退, 若要回退需调用 ResetOffset
+		// 	session.MarkMessage(msg, "")
+		// }
 		// // 只有真正成功入队的数据，才在符合条件时触发手动标记/提交
 		// // （注意：如果你用的是 AUTO_COMMIT_NATIVE，下面这段原本就不用写，留空即可）
 		// if that.AutoCommit == AUTO_COMMIT_CUSTOM {

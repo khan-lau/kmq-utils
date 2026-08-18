@@ -42,6 +42,17 @@ func (that *ClientHandlerWrapper) Ping() bool {
 	return false
 }
 
+// PingE 探测连接, 返回具体错误信息(定位用)
+func (that *ClientHandlerWrapper) PingE() error {
+	if that.Client != nil {
+		return that.Client.PingE()
+	}
+	if that.ClusterClient != nil {
+		return that.ClusterClient.PingE()
+	}
+	return ErrWrapError
+}
+
 // SyncPSubscribeReceive 同步订阅Redis主题, 并处理消息
 //
 //	参数
@@ -132,6 +143,14 @@ func (that *RedisToolkit) Ping() bool {
 		return false
 	}
 	return that.redisHandler.Ping()
+}
+
+// PingE 探测连接, 返回具体错误信息(定位用)
+func (that *RedisToolkit) PingE() error {
+	if len(that.conf.Addrs) == 0 {
+		return ErrEmptyAddrs
+	}
+	return that.redisHandler.PingE()
 }
 
 // SyncPSubscribeReceive 同步订阅Redis主题, 并处理消息

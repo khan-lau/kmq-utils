@@ -144,7 +144,7 @@ func (that *RedisSub) dbConnect() bool {
 		that.redisHandler = NewRedisToolkit(subCtx, that.conf, that.logf)
 	}
 
-	if !that.redisHandler.Ping() { //探测连接失败
+	if err := that.redisHandler.PingE(); err != nil { //探测连接失败
 		that.connected.Store(false)
 		that.redisHandler.Stop()
 		that.redisHandler = nil

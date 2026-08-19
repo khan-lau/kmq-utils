@@ -87,6 +87,17 @@ func (that *ClientHandlerWrapper) PublishArray(messages []kredis.RedisMessage) [
 	return []error{ErrWrapError}
 }
 
+// PublishArrayWithCtx 使用指定ctx发布消息, 排水模式下使用, 避免内部ctx已被取消导致发送失败
+func (that *ClientHandlerWrapper) PublishArrayWithCtx(ctx *kcontext.ContextNode, messages []kredis.RedisMessage) []error {
+	if that.Client != nil {
+		return that.Client.PublishArrayWithCtx(ctx, messages)
+	}
+	if that.ClusterClient != nil {
+		return that.ClusterClient.PublishArrayWithCtx(ctx, messages)
+	}
+	return []error{ErrWrapError}
+}
+
 // Stop 停止Redis客户端, 并释放资源
 func (that *ClientHandlerWrapper) Stop() {
 	if that.Client != nil {
@@ -169,6 +180,15 @@ func (that *RedisToolkit) PublishArray(messages []kredis.RedisMessage) []error {
 		return []error{ErrEmptyAddrs}
 	}
 	return that.redisHandler.PublishArray(messages)
+}
+
+// PublishArrayWithCtx 使用指定ctx发布Redis主题, 排水模式下使用, 避免内部ctx已被取消导致发送失败
+func (that *RedisToolkit) PublishArrayWithCtx(ctx *kcontext.ContextNode, messages []kredis.RedisMessage) []error {
+	if len(that.conf.Addrs) == 0 {
+		that.log(klog.ErrorLevel, "%v", ErrEmptyAddrs)
+		return []error{ErrEmptyAddrs}
+	}
+	return that.redisHandler.PublishArrayWithCtx(ctx, messages)
 }
 
 func (that *RedisToolkit) Stop() {

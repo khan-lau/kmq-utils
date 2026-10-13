@@ -58,7 +58,7 @@ func (that *ClientHandlerWrapper) PingE() error {
 //	参数
 //	- @param callback: 消息处理回调函数, 参数为(err error, topic string, payload any)
 //	- @param topics: 要订阅的主题列表
-func (that *ClientHandlerWrapper) SyncPSubscribeReceive(callback func(err error, topic string, payload any), topics ...string) {
+func (that *ClientHandlerWrapper) SyncPSubscribeReceive(callback kredis.RedisMessageRecvFunc, topics ...string) {
 	if that.Client != nil {
 		that.Client.SyncPSubscribeReceive(callback, topics...)
 	}
@@ -165,7 +165,7 @@ func (that *RedisToolkit) PingE() error {
 }
 
 // SyncPSubscribeReceive 同步订阅Redis主题, 并处理消息
-func (that *RedisToolkit) SyncPSubscribeReceive(callback func(err error, topic string, payload any), topics ...string) {
+func (that *RedisToolkit) SyncPSubscribeReceive(callback kredis.RedisMessageRecvFunc, topics ...string) {
 	if len(that.conf.Addrs) == 0 {
 		that.log(klog.ErrorLevel, "redis config addrs is empty")
 		return

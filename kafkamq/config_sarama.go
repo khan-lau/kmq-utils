@@ -53,6 +53,7 @@ type KafkaMessage struct {
 	Partition int32
 	Offset    int64
 	Headers   []sarama.RecordHeader
+	RecvTime  int64 // 接收时间戳, 单位毫秒 监测消息延迟时使用
 	Key       []byte
 	Value     []byte
 

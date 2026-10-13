@@ -303,8 +303,9 @@ func (that *NatsCoreClient) syncSubscriptions() error {
 
 	handler := coreConf.MainHandler() // 假设配置中有此 handler
 	natsHandler := func(msg *nats.Msg) {
+		now := time.Now().UnixMilli()
 		if handler != nil {
-			handler(that, NatsMessage{Topic: msg.Subject, Reply: msg.Reply, Header: msg.Header, Payload: msg.Data})
+			handler(that, NatsMessage{Topic: msg.Subject, Reply: msg.Reply, Header: msg.Header, RecvTime: now, Payload: msg.Data})
 		}
 	}
 

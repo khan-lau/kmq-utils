@@ -335,7 +335,9 @@ func (that *privateConsumerGroupHandler) Cleanup(session sarama.ConsumerGroupSes
 // 一旦 Messages() 通道被关闭，Handler 必须完成其消息处理循环并退出。
 func (that *privateConsumerGroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for msg := range claim.Messages() {
-		kafkMsg := KafkaMessage{Topic: msg.Topic, Partition: msg.Partition, Offset: msg.Offset, Key: msg.Key, Value: msg.Value, session: session}
+		now := time.Now().UnixMilli()
+
+		kafkMsg := KafkaMessage{Topic: msg.Topic, Partition: msg.Partition, Offset: msg.Offset, RecvTime: now, Key: msg.Key, Value: msg.Value, session: session}
 
 		enqueued := false
 		for {

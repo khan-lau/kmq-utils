@@ -24,10 +24,11 @@ type ReadyCallbackFunc func(ready bool)                       // 启动完成回
 
 type MqttMessage struct {
 	Topic     string
-	Duplicate bool // 是否为重传消息, QOS1 QOS2 时使用，默认为false, paho.mqtt.golang 会自行管理, 无需手动设置
-	Qos       byte // 质量标记, 0表示最多一次，1表示至少一次，2表示恰好一次
-	Retained  bool // 遗嘱标记, 遗嘱消息是否保留，如果为true，则服务器会将此消息保存到持久存储中
-	MessageID uint16
+	Duplicate bool   // 是否为重传消息, QOS1 QOS2 时使用，默认为false, paho.mqtt.golang 会自行管理, 无需手动设置
+	Qos       byte   // 质量标记, 0表示最多一次，1表示至少一次，2表示恰好一次
+	Retained  bool   // 遗嘱标记, 遗嘱消息是否保留，如果为true，则服务器会将此消息保存到持久存储中
+	MessageID uint16 // 消息ID, 用于唯一标识一条消息, QOS1 QOS2 时使用, 服务器会自动分配, 无需手动设置
+	RecvTime  int64  // 接收时间戳, 单位毫秒 监测消息延迟时使用
 	Payload   []byte
 }
 

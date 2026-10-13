@@ -188,12 +188,12 @@ func (that *RedisSub) startSubscription() {
 	that.redisHandler.SyncPSubscribeReceive(
 		// // 依赖go-redis v9封装的链路自动回复机制
 		// that.redisHandler.SyncPSubscribeWithChanSize(1000, int(that.bufferSize),
-		func(err error, topic string, payload any) {
+		func(err error, topic string, recvTime int64, payload any) {
 			if err != nil {
 				that.onError(err)
 			} else {
 				if s, ok := payload.(string); ok {
-					msg := kredis.RedisMessage{Topic: topic, Message: s}
+					msg := kredis.RedisMessage{Topic: topic, RecvTime: recvTime, Message: s}
 					msgHandler(that, msg)
 				} else {
 					that.log(klog.WarnLevel, "Subscribe reids topic error: payload data type unknown, %v", payload)

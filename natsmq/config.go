@@ -25,11 +25,12 @@ type EventCallbackFunc func(event any)
 type ReadyCallbackFunc func(ready bool)
 
 type NatsMessage struct {
-	Seq     int64       // 消息序列号, 仅在 JetStream 模式下有效, 实际存储的是纳秒时间戳
-	Topic   string      // 主题
-	Reply   string      // 回复主题 reply模式时有效
-	Header  nats.Header // 消息头信息
-	Payload []byte      // 消息体内容
+	Seq      int64       // 消息序列号, 仅在 JetStream 模式下有效, 实际存储的是纳秒时间戳
+	Topic    string      // 主题
+	Reply    string      // 回复主题 reply模式时有效
+	Header   nats.Header // 消息头信息
+	RecvTime int64       // 接收时间戳, 单位毫秒 监测消息延迟时使用
+	Payload  []byte      // 消息体内容
 
 	origin *nats.Msg
 }

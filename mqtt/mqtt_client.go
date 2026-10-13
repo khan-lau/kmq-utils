@@ -224,9 +224,11 @@ func (that *MqttClient) syncSubscriptions() {
 
 	handler := that.conf.MainHandler()
 	pahoHandler := func(c paho.Client, msg paho.Message) {
+		now := time.Now().UnixMilli()
 		if handler != nil {
 			handler(c, MqttMessage{
 				Topic:     msg.Topic(),
+				RecvTime:  now,
 				Payload:   msg.Payload(),
 				Qos:       msg.Qos(),
 				Retained:  msg.Retained(),

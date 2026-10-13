@@ -327,13 +327,14 @@ func (that *NatsJetStreamClient) syncSubscriptions() error {
 	// 准备消息处理Handler
 	handler := jsConf.MainHandler()
 	natsHandler := func(msg *nats.Msg) {
+		now := time.Now().UnixMilli()
 		if handler != nil {
 			meta, err := msg.Metadata()
 			if err != nil {
 				that.log(klog.WarnLevel, "Failed to get message metadata: %v", err)
 				return
 			}
-			handler(that, NatsMessage{Seq: meta.Timestamp.UnixNano(), Topic: msg.Subject, Reply: msg.Reply, Header: msg.Header, Payload: msg.Data, origin: msg})
+			handler(that, NatsMessage{Seq: meta.Timestamp.UnixNano(), Topic: msg.Subject, Reply: msg.Reply, Header: msg.Header, RecvTime: now, Payload: msg.Data, origin: msg})
 		}
 
 		// if that.conf.jetStream.consumer != nil && (that.conf.jetStream.consumer.AutoCommit() == AUTO_COMMIT_NATIVE || that.conf.jetStream.consumer.AutoCommit() == AUTO_COMMIT_CUSTOM) {
